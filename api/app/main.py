@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import get_actor
+from app.auth import router as auth_router
 from app.config import settings
 from app.errors import install_error_handlers
 from app.routers import (
+    agent,
     check_ins,
     city_memories,
     city_tools,
@@ -23,6 +26,15 @@ app = FastAPI(
 
 install_error_handlers(app)
 
+
+@app.middleware("http")
+async def private_response_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -32,12 +44,14 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
-app.include_router(users.router, prefix="/api/v1")
-app.include_router(map_overview.router, prefix="/api/v1")
-app.include_router(check_ins.router, prefix="/api/v1")
-app.include_router(city_tools.router, prefix="/api/v1")
-app.include_router(route_tools.router, prefix="/api/v1")
-app.include_router(city_memories.router, prefix="/api/v1")
-app.include_router(media_uploads.router, prefix="/api/v1")
-app.include_router(image_generation.router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(agent.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(users.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(map_overview.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(check_ins.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(city_tools.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(route_tools.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(city_memories.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(media_uploads.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
+app.include_router(image_generation.router, prefix="/api/v1", dependencies=[Depends(get_actor)])
 

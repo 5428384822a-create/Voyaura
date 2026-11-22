@@ -5,6 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     environment: str = "development"
+    # Explicit single-owner access, not a multi-tenant account system.
+    auth_token: str = ""
+    auth_username: str = "AuroraRovella"
     database_url: str = (
         "postgresql+psycopg://voyaura:voyaura_dev_only@127.0.0.1:5433/voyaura"
     )

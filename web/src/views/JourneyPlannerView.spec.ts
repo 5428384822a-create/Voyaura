@@ -81,7 +81,7 @@ describe('JourneyPlannerView', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://127.0.0.1:8001/api/v1/tools/routes/plan',
+      '/api/v1/tools/routes/plan',
       expect.objectContaining({ method: 'POST' }),
     )
     expect(wrapper.text()).toContain('20 小时')

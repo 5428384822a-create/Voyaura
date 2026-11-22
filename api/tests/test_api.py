@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.database import Base, get_db
 from app.errors import AppError
 from app.image_jobs import process_image_job, render_travel_stamp, resolve_caption_font
@@ -284,7 +285,9 @@ class FakeImageProvider:
 
 
 @pytest.fixture(autouse=True)
-def reset_database() -> Generator[None, None, None]:
+def reset_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    monkeypatch.setattr(settings, "auth_token", "test-only-voyaura-access-token-000000000000")
+    monkeypatch.setattr(settings, "auth_username", "AuroraRovella")
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with TestingSession.begin() as db:
@@ -303,7 +306,7 @@ def reset_database() -> Generator[None, None, None]:
     yield
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"Authorization": "Bearer test-only-voyaura-access-token-000000000000"})
 
 
 def create_memory_for_media() -> str:

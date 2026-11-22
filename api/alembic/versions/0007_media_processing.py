@@ -18,22 +18,26 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "media_assets",
-        sa.Column("scan_status", sa.String(length=20), server_default="not_scanned", nullable=False),
-    )
-    op.add_column("media_assets", sa.Column("processing_error", sa.String(length=500)))
-    op.add_column("media_assets", sa.Column("thumbnail_mime_type", sa.String(length=100)))
-    op.add_column("media_assets", sa.Column("thumbnail_width", sa.Integer()))
-    op.add_column("media_assets", sa.Column("thumbnail_height", sa.Integer()))
-    op.add_column("media_assets", sa.Column("processed_at", sa.DateTime(timezone=True)))
-    op.alter_column("media_assets", "scan_status", server_default=None)
+    with op.batch_alter_table("media_assets") as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "scan_status", sa.String(length=20), server_default="not_scanned", nullable=False
+            )
+        )
+        batch_op.add_column(sa.Column("processing_error", sa.String(length=500)))
+        batch_op.add_column(sa.Column("thumbnail_mime_type", sa.String(length=100)))
+        batch_op.add_column(sa.Column("thumbnail_width", sa.Integer()))
+        batch_op.add_column(sa.Column("thumbnail_height", sa.Integer()))
+        batch_op.add_column(sa.Column("processed_at", sa.DateTime(timezone=True)))
+    with op.batch_alter_table("media_assets") as batch_op:
+        batch_op.alter_column("scan_status", server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_column("media_assets", "processed_at")
-    op.drop_column("media_assets", "thumbnail_height")
-    op.drop_column("media_assets", "thumbnail_width")
-    op.drop_column("media_assets", "thumbnail_mime_type")
-    op.drop_column("media_assets", "processing_error")
-    op.drop_column("media_assets", "scan_status")
+    with op.batch_alter_table("media_assets") as batch_op:
+        batch_op.drop_column("processed_at")
+        batch_op.drop_column("thumbnail_height")
+        batch_op.drop_column("thumbnail_width")
+        batch_op.drop_column("thumbnail_mime_type")
+        batch_op.drop_column("processing_error")
+        batch_op.drop_column("scan_status")

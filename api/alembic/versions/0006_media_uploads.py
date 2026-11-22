@@ -18,49 +18,38 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("media_assets", sa.Column("client_request_id", sa.Uuid(), nullable=True))
-    op.add_column(
-        "media_assets",
-        sa.Column("visibility", sa.String(length=20), server_default="private", nullable=False),
-    )
-    op.add_column(
-        "media_assets",
-        sa.Column("upload_status", sa.String(length=20), server_default="ready", nullable=False),
-    )
-    op.add_column(
-        "media_assets",
-        sa.Column(
-            "exif_status",
-            sa.String(length=24),
-            server_default="not_applicable",
-            nullable=False,
-        ),
-    )
-    op.add_column("media_assets", sa.Column("failure_code", sa.String(length=64)))
-    op.add_column(
-        "media_assets",
-        sa.Column("upload_expires_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.add_column(
-        "media_assets",
-        sa.Column("uploaded_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_unique_constraint(
-        "uq_media_asset_client_request",
-        "media_assets",
-        ["client_request_id"],
-    )
-    op.alter_column("media_assets", "visibility", server_default=None)
-    op.alter_column("media_assets", "upload_status", server_default=None)
-    op.alter_column("media_assets", "exif_status", server_default=None)
+    with op.batch_alter_table("media_assets") as batch_op:
+        batch_op.add_column(sa.Column("client_request_id", sa.Uuid(), nullable=True))
+        batch_op.add_column(
+            sa.Column("visibility", sa.String(length=20), server_default="private", nullable=False)
+        )
+        batch_op.add_column(
+            sa.Column("upload_status", sa.String(length=20), server_default="ready", nullable=False)
+        )
+        batch_op.add_column(
+            sa.Column(
+                "exif_status", sa.String(length=24), server_default="not_applicable", nullable=False
+            )
+        )
+        batch_op.add_column(sa.Column("failure_code", sa.String(length=64)))
+        batch_op.add_column(
+            sa.Column("upload_expires_at", sa.DateTime(timezone=True), nullable=True)
+        )
+        batch_op.add_column(sa.Column("uploaded_at", sa.DateTime(timezone=True), nullable=True))
+    with op.batch_alter_table("media_assets") as batch_op:
+        batch_op.create_unique_constraint("uq_media_asset_client_request", ["client_request_id"])
+        batch_op.alter_column("visibility", server_default=None)
+        batch_op.alter_column("upload_status", server_default=None)
+        batch_op.alter_column("exif_status", server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_media_asset_client_request", "media_assets", type_="unique")
-    op.drop_column("media_assets", "uploaded_at")
-    op.drop_column("media_assets", "upload_expires_at")
-    op.drop_column("media_assets", "failure_code")
-    op.drop_column("media_assets", "exif_status")
-    op.drop_column("media_assets", "upload_status")
-    op.drop_column("media_assets", "visibility")
-    op.drop_column("media_assets", "client_request_id")
+    with op.batch_alter_table("media_assets") as batch_op:
+        batch_op.drop_constraint("uq_media_asset_client_request", type_="unique")
+        batch_op.drop_column("uploaded_at")
+        batch_op.drop_column("upload_expires_at")
+        batch_op.drop_column("failure_code")
+        batch_op.drop_column("exif_status")
+        batch_op.drop_column("upload_status")
+        batch_op.drop_column("visibility")
+        batch_op.drop_column("client_request_id")

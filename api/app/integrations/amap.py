@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -321,6 +322,10 @@ class AMapClient:
                 retryable=True,
             ) from exc
 
+        if not isinstance(payload, dict):
+            raise AppError(
+                "AMAP_RESPONSE_INVALID", "高德返回了无法识别的数据结构。", status_code=502
+            )
         if str(payload.get("status")) != "1":
             infocode = str(payload.get("infocode") or "unknown")
             code, message, retryable = AMAP_ERROR_MAP.get(
@@ -346,7 +351,13 @@ class AMapClient:
     def _parse_location(value: str) -> tuple[float, float]:
         try:
             longitude, latitude = value.split(",", 1)
-            return float(longitude), float(latitude)
+            longitude, latitude = float(longitude), float(latitude)
+            if not (
+                math.isfinite(longitude) and math.isfinite(latitude)
+                and -180 <= longitude <= 180 and -90 <= latitude <= 90
+            ):
+                raise ValueError("coordinates outside the geographic domain")
+            return longitude, latitude
         except (TypeError, ValueError) as exc:
             raise AppError(
                 "AMAP_COORDINATE_INVALID",
@@ -367,14 +378,15 @@ class AMapClient:
     def _integer(value: Any, *, default: int = 0) -> int:
         try:
             return int(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return default
 
     @staticmethod
     def _optional_number(value: Any) -> float | None:
         try:
-            return float(value)
-        except (TypeError, ValueError):
+            number = float(value)
+            return number if math.isfinite(number) else None
+        except (TypeError, ValueError, OverflowError):
             return None
 
     @staticmethod
@@ -399,11 +411,18 @@ class AMapClient:
             if mode == "transit"
             else cls._route_steps(payload.get("steps"), transport=mode)
         )
-        duration = cls._integer(cost.get("duration") or payload.get("duration"))
+        duration = cls._optional_number(cost.get("duration") or payload.get("duration"))
+        distance = cls._optional_number(payload.get("distance"))
+        if duration is None or duration <= 0 or distance is None or distance < 0:
+            raise AppError(
+                "AMAP_ROUTE_DATA_INCOMPLETE",
+                "路线缺少有效的交通耗时或距离，不能将未知值当作零。",
+                status_code=502,
+            )
         taxi_cost = cls._optional_number(payload.get("taxi_cost") or route.get("taxi_cost"))
         return AMapRouteOption(
-            distance_meters=cls._integer(payload.get("distance")),
-            duration_seconds=duration,
+            distance_meters=int(distance),
+            duration_seconds=max(1, int(duration)),
             steps=tuple(raw_steps),
             walking_distance_meters=(
                 cls._integer(payload.get("walking_distance")) if mode == "transit" else None

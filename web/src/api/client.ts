@@ -42,7 +42,9 @@ import type {
   RouteCapabilities,
 } from '../types'
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8001/api/v1'
+import { getAccessToken, getOwnerUsername } from './session'
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
 export const emptyOverview: MapOverview = {
   username: 'AuroraRovella',
@@ -79,12 +81,16 @@ export class ApiClientError extends Error implements AppErrorInfo {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+        ...init?.headers,
+      },
     })
   } catch {
     throw new ApiClientError({
@@ -108,7 +114,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function getMapOverview(username = 'AuroraRovella'): Promise<MapOverview> {
+export function getMapOverview(username = getOwnerUsername()): Promise<MapOverview> {
   return request(`/map/overview?username=${encodeURIComponent(username)}`)
 }
 
@@ -146,7 +152,7 @@ export function confirmManualCheckIn(payload: ManualCityCheckIn): Promise<CheckI
 
 export function getCityMemories(
   adcode: string,
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
 ): Promise<CityMemoryDetail> {
   return request(
     `/cities/${encodeURIComponent(adcode)}/memories?username=${encodeURIComponent(username)}`,
@@ -330,7 +336,7 @@ export function completeMediaUpload(
   adcode: string,
   memoryId: string,
   assetId: string,
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
 ): Promise<MediaUploadCompleteResult> {
   return request(
     `/cities/${encodeURIComponent(adcode)}/memories/${encodeURIComponent(memoryId)}/media/${encodeURIComponent(assetId)}/complete`,
@@ -342,7 +348,7 @@ export function getMediaProcessingStatus(
   adcode: string,
   memoryId: string,
   assetId: string,
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
 ): Promise<MediaProcessingStatus> {
   const params = new URLSearchParams({ username })
   return request(
@@ -352,7 +358,7 @@ export function getMediaProcessingStatus(
 
 export function getCityMediaTasks(
   adcode: string,
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
 ): Promise<MediaTaskList> {
   const params = new URLSearchParams({ username })
   return request(`/cities/${encodeURIComponent(adcode)}/media/tasks?${params.toString()}`)
@@ -396,14 +402,14 @@ export function createImageJob(payload: ImageJobCreateDraft): Promise<ImageJobCr
 
 export function getImageJob(
   jobId: string,
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
 ): Promise<ImageJob> {
   const params = new URLSearchParams({ username })
   return request(`/image-jobs/${encodeURIComponent(jobId)}?${params.toString()}`)
 }
 
 export function getImageJobs(
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
   favoriteOnly = false,
 ): Promise<ImageJobList> {
   const params = new URLSearchParams({ username, favorite_only: String(favoriteOnly) })
@@ -413,7 +419,7 @@ export function getImageJobs(
 export function setImageJobFavorite(
   jobId: string,
   favorite: boolean,
-  username = 'AuroraRovella',
+  username = getOwnerUsername(),
 ): Promise<ImageJob> {
   return request(`/image-jobs/${encodeURIComponent(jobId)}/favorite`, {
     method: 'POST',

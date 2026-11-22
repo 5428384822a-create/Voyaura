@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  server: {
+    proxy: { '/api': { target: process.env.VOYAURA_DEV_API_URL ?? 'http://127.0.0.1:8018', changeOrigin: true } },
+  },
   plugins: [
     vue(),
     VitePWA({

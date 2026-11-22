@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, MessageCircle, Send, Sparkles, X } from 'lucide-vue-next'
+import { Bell } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import {
   ApiClientError,
@@ -31,6 +31,9 @@ import {
   uploadMediaFile,
 } from './api/client'
 import AppNavigation from './components/AppNavigation.vue'
+import ConnectionPanel from './components/ConnectionPanel.vue'
+import AgentWorkspace from './views/AgentWorkspace.vue'
+import { getAccessToken } from './api/session'
 import CheckInDialog from './components/CheckInDialog.vue'
 import CityMemoryPanel from './components/CityMemoryPanel.vue'
 import MemoryComposerDialog from './components/MemoryComposerDialog.vue'
@@ -80,8 +83,9 @@ import MapHomeView from './views/MapHomeView.vue'
 const activeView = ref<AppView>('map')
 const overview = ref<MapOverview>(emptyOverview)
 const apiConnected = ref(false)
-const xiaoxiOpen = ref(false)
-const composer = ref('')
+const connectionOpen = ref(!getAccessToken())
+const agentCity = ref('440100')
+const routeToolsOpen = ref(false)
 const checkInPhase = ref<'idle' | 'locating' | 'manual' | 'preview' | 'confirming' | 'success' | 'error'>('idle')
 const checkInPayload = ref<CheckInCoordinates | ManualCityCheckIn | null>(null)
 const checkInPreview = ref<CheckInPreview | null>(null)
@@ -154,6 +158,22 @@ onMounted(async () => {
     apiConnected.value = false
   }
 })
+
+function selectView(view: AppView) {
+  if (view === 'profile') { connectionOpen.value = true; return }
+  routeToolsOpen.value = false
+  activeView.value = view
+}
+
+async function onConnected() {
+  connectionOpen.value = false
+  try { overview.value = await getMapOverview(); apiConnected.value = true }
+  catch { apiConnected.value = false }
+}
+
+function reloadDisconnected() {
+  window.location.reload()
+}
 
 function localError(code: string, message: string, retryable = true): AppErrorInfo {
   return { code, message, details: {}, retryable }
@@ -375,7 +395,6 @@ async function selectCity(city: VisitedCity) {
   cityMediaTasks.value = []
   mediaTaskError.value = null
   cityMemoryPhase.value = 'loading'
-  xiaoxiOpen.value = false
   const [detailResult, tasksResult] = await Promise.allSettled([
     getCityMemories(city.adcode),
     getCityMediaTasks(city.adcode),
@@ -405,13 +424,13 @@ function closeCityMemory() {
 
 function openXiaoxi() {
   selectedCity.value = null
-  xiaoxiOpen.value = true
+  activeView.value = 'journeys'
 }
 
 function askXiaoxiAboutCity(city: VisitedCity) {
   closeCityMemory()
-  xiaoxiOpen.value = true
-  composer.value = `小曦，带我回顾在${city.name_zh}的旅行记忆。`
+  agentCity.value = city.adcode
+  activeView.value = 'memories'
 }
 
 function openMemoryComposer(city: VisitedCity) {
@@ -1027,9 +1046,9 @@ async function confirmMediaUpload() {
   <div class="app-shell">
     <aside class="brand-rail">
       <button class="brand-mark" type="button" title="Voyaura 地图" aria-label="Voyaura 地图" @click="activeView = 'map'">V</button>
-      <AppNavigation :active-view="activeView" @select="activeView = $event" />
+      <AppNavigation :active-view="activeView" @select="selectView" />
       <button class="notification-button" type="button" title="通知" aria-label="通知"><Bell :size="20" /></button>
-      <span class="avatar" title="AuroraRovella">AR</span>
+      <button class="avatar" type="button" title="私人档案连接" aria-label="私人档案连接" @click="connectionOpen = true">AR</button>
     </aside>
 
     <MapHomeView
@@ -1044,14 +1063,21 @@ async function confirmMediaUpload() {
       @select-city="selectCity"
     />
     <JourneyPlannerView
-      v-else-if="activeView === 'journeys'"
+      v-else-if="activeView === 'journeys' && routeToolsOpen"
       :overview="overview"
+      @back="routeToolsOpen = false"
+    />
+    <AgentWorkspace
+      v-else-if="activeView === 'journeys' || activeView === 'memories'"
+      :initial-kind="activeView === 'memories' ? 'story' : 'plan'"
+      :initial-city="agentCity"
       @back="activeView = 'map'"
+      @connect="connectionOpen = true"
     />
     <ImageStudioView v-else-if="activeView === 'studio'" @back="activeView = 'map'" />
     <EmptyView v-else :view="activeView" @back="activeView = 'map'" />
 
-    <AppNavigation class="mobile-nav" :active-view="activeView" @select="activeView = $event" />
+    <AppNavigation class="mobile-nav" :active-view="activeView" @select="selectView" />
 
     <Transition name="dialog">
       <CheckInDialog
@@ -1107,6 +1133,9 @@ async function confirmMediaUpload() {
         @style-photo="openImageStyle"
       />
     </Transition>
+    <ConnectionPanel v-if="connectionOpen" @close="connectionOpen = false" @connected="onConnected" @disconnected="reloadDisconnected" />
+    <button v-if="activeView === 'journeys' && !routeToolsOpen" class="legacy-route-entry" type="button" @click="routeToolsOpen = true">城市接驳工具</button>
+
 
     <Transition name="dialog">
       <MediaUploadDialog
@@ -1186,31 +1215,10 @@ async function confirmMediaUpload() {
       />
     </Transition>
 
-    <Transition name="panel">
-      <aside v-if="xiaoxiOpen" class="xiaoxi-panel" aria-label="小曦旅行助手">
-        <header>
-          <span class="xiaoxi-sun"><Sparkles :size="20" /></span>
-          <div><small>VOYAURA COMPANION</small><strong>小曦</strong></div>
-          <button type="button" title="关闭" aria-label="关闭" @click="xiaoxiOpen = false"><X :size="20" /></button>
-        </header>
-        <div class="chat-body">
-          <p class="date-stamp">NOV · 10 · 2026</p>
-          <div class="xiaoxi-message">
-            <span>曦</span>
-            <p>晚上好，Aurora。今天想去哪里，还是要把刚刚抵达的城市收藏起来？</p>
-          </div>
-          <div class="chat-suggestions">
-            <button type="button" @click="composer = '帮我规划一个三天两夜的城市旅程'">规划新旅程</button>
-            <button type="button" @click="composer = '介绍一下我现在所在的城市'">认识这座城</button>
-            <button type="button" @click="composer = '帮我整理今天拍摄的照片'">整理旅行照片</button>
-          </div>
-        </div>
-        <form class="chat-composer" @submit.prevent="composer = ''">
-          <MessageCircle :size="18" />
-          <input v-model="composer" aria-label="给小曦发消息" placeholder="问问小曦..." />
-          <button type="submit" title="发送" aria-label="发送"><Send :size="18" /></button>
-        </form>
-      </aside>
-    </Transition>
+
   </div>
 </template>
+
+<style scoped>
+.legacy-route-entry{position:absolute;right:26px;bottom:14px;z-index:35;padding:6px 10px;border:1px solid #d7dbc9;border-radius:6px;background:#f9f8ef;color:#879174;font-size:10px;cursor:pointer}@media(max-width:760px){.legacy-route-entry{bottom:75px;right:14px;font-size:9px}}
+</style>

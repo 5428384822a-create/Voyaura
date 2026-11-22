@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.auth import require_actor_username
 from app.database import get_db
 from app.errors import AppError
 from app.models import CityMemory, CityVisit, MediaAsset, User
@@ -25,6 +26,7 @@ def get_map_overview(
     db: Annotated[Session, Depends(get_db)],
     username: Annotated[str, Query()] = "AuroraRovella",
 ) -> MapOverviewOut:
+    require_actor_username(db, username)
     user = db.scalar(select(User).where(User.username == username))
     if user is None:
         raise AppError("USER_NOT_FOUND", "找不到地图所属的用户。", status_code=404)

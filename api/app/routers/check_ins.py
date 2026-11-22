@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import require_actor_username
 from app.database import get_db
 from app.errors import AppError
 from app.integrations.amap import AMapClient, ResolvedCity, get_amap_client
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/check-ins", tags=["check-ins"])
 
 
 def require_user(db: Session, username: str) -> User:
+    require_actor_username(db, username)
     user = db.scalar(select(User).where(User.username == username))
     if user is None:
         raise AppError("USER_NOT_FOUND", "找不到要点亮城市的用户。", status_code=404)
@@ -76,7 +78,9 @@ def upsert_visit(
         )
         db.add(city)
         db.flush()
-    else:
+    elif source == "device":
+        # A manual/IP suggestion is user input, not authority to rewrite a
+        # shared canonical city's name and coordinates.
         city.name_zh = resolved.name_zh
         city.province_zh = resolved.province_zh
         city.longitude = resolved.longitude
