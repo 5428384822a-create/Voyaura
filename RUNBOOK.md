@@ -51,7 +51,7 @@ npm audit --omit=dev
 api/.venv/Scripts/python.exe scripts/verify_e2e.py
 ```
 
-此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机10项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
+此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机10项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round2-split，第二轮原材料位于docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
 
 本机已安装Chrome，可直接运行。没有Chrome时，在web运行 `npx playwright install chromium`，再设置 `$env:VOYAURA_E2E_CHANNEL='chromium'` 后执行运行器。Linux可用 `npx playwright install --with-deps chromium`。直接 `npm run test:e2e` 会连接指定的现有本地profile并写测试夹具，团队应优先使用隔离运行器。
 
@@ -87,3 +87,12 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 设计与真实截图：`docs/design/round2/index.html`（在本机浏览器中双击打开）、`overview.png`与`REVIEW.md`。截图审阅无需令牌；真实私人流程继续使用本机连接。
 
 只读输入截图：启动API和Web后在web执行 `node scripts/capture-plan-input.mjs`。脚本仅在本地填写表单并读取已有服务信息，不向个人档案写入任务；四尺寸检查发现横向溢出、图片失败、pageerror或任何API写请求时退出失败。结果页等截图由隔离E2E生成，勿使用个人profile作为回归夹具库。
+
+
+## 行程与地图同屏追加优化
+
+1280像素及以上，“每日安排”默认显示时间线和地图两栏；较窄窗口保留标签切换。时间线的编号、地图编号与地图列表可以选择站点并同步日期，“查看对应行程”回到相应时间线。展开地图或改变窗口宽度保留当前选择；重排会清除旧选择。
+
+缺少地图Key或用户授权时不加载SDK；SDK失败时显示可点选的坐标示意。SDK布局变化会清理旧实例；在线高德尚待真实凭证联调，不能用本地示意图证明在线结果。
+
+当前审阅文件为docs/design/round2-split/index.html，可在本机浏览器打开；第二轮“查看结果页改稿前后”也有新入口。默认隔离E2E报告、截图与CI产物已改为round2-split，之前两轮的原始证据保留。

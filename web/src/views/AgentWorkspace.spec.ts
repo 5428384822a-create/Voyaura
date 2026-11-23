@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentWorkspace from './AgentWorkspace.vue'
+import AgentRouteMap from '../components/AgentRouteMap.vue'
 import * as api from '../api/agent'
 import type { AgentRun } from '../api/agent'
 
@@ -62,6 +63,26 @@ function button(wrapper: ReturnType<typeof mount>, text: string) {
   if (!found) throw new Error(`找不到按钮 ${text}`)
   return found
 }
+function wideScreen() {
+  let listener: ((event: MediaQueryListEvent) => void) | undefined
+  const remove = vi.fn()
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('1280'),
+    media: query,
+    addEventListener: (_type: string, callback: (event: MediaQueryListEvent) => void) => {
+      if (query.includes('1280')) listener = callback
+    },
+    removeEventListener: remove,
+  }))
+  return {
+    remove,
+    resize: async (matches: boolean) => {
+      listener?.({ matches } as MediaQueryListEvent)
+      await flushPromises()
+    },
+  }
+}
+afterEach(() => vi.unstubAllGlobals())
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(api.getAgentCapabilities).mockResolvedValue({
@@ -370,5 +391,68 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('条件草案')
     expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('核对细节')
+  })
+  it('宽屏同屏只挂载一个地图，站点与日期联动且缩放后保留选中地点', async () => {
+    const screen = wideScreen()
+    const value = fixture()
+    value.result.days!.push({
+      ...value.result.days![0]!,
+      day: 2,
+      date: '2026-12-02',
+      stops: [{ ...value.result.days![0]!.stops[0]!, candidate_id: 'c2', name: '次日夹具地点' }],
+    })
+    vi.mocked(api.createAgentRun).mockResolvedValue(value)
+    const wrapper = mount(AgentWorkspace, { attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('textarea').setValue('测试同屏与站点联动')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('.plan-panels.is-split').exists()).toBe(true)
+    expect(wrapper.find('#schedule-panel').isVisible()).toBe(true)
+    expect(wrapper.find('#map-panel').isVisible()).toBe(true)
+    expect(wrapper.findAllComponents(AgentRouteMap)).toHaveLength(1)
+    await wrapper.find('.stop-dot').trigger('click')
+    expect(wrapper.find('.day-timeline li.is-selected h3').text()).toBe('夹具地点')
+    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBe('c1')
+    wrapper.findComponent(AgentRouteMap).vm.$emit('select', { day: 2, candidateId: 'c2' })
+    await flushPromises()
+    expect(wrapper.find('.day-heading').text()).toContain('第 2 天')
+    expect(wrapper.find('.map-selection h4').text()).toBe('次日夹具地点')
+    await screen.resize(false)
+    expect(wrapper.find('.plan-panels.is-split').exists()).toBe(false)
+    expect(wrapper.findAllComponents(AgentRouteMap)).toHaveLength(0)
+    await wrapper.find('.stop-dot').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#map-panel').isVisible()).toBe(true)
+    expect(wrapper.find('#schedule-panel').isVisible()).toBe(false)
+    const instance = wrapper.findComponent(AgentRouteMap).element
+    await screen.resize(true)
+    await wrapper.find('#schedule-tab').trigger('click')
+    expect(wrapper.findComponent(AgentRouteMap).element).toBe(instance)
+    expect(wrapper.findAllComponents(AgentRouteMap)).toHaveLength(1)
+    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBe('c2')
+    wrapper.unmount()
+    expect(screen.remove).toHaveBeenCalled()
+  })
+  it('重新规划移除选中地点后清除地图高亮，不显示已经删除的站点', async () => {
+    wideScreen()
+    const updated = fixture()
+    updated.revision = 2
+    updated.result.days![0]!.stops = [
+      { ...updated.result.days![0]!.stops[0]!, candidate_id: 'c2', name: '保留的夹具地点' },
+    ]
+    vi.mocked(api.editAgentDraft).mockResolvedValue(updated)
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await wrapper.find('textarea').setValue('测试移除选中站点')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    await wrapper.find('.stop-dot').trigger('click')
+    expect(wrapper.find('.map-selection').exists()).toBe(true)
+    await wrapper.find('[aria-label="从草案移除夹具地点"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.map-selection').exists()).toBe(false)
+    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBeNull()
+    expect(wrapper.find('.day-timeline').text()).toContain('保留的夹具地点')
   })
 })

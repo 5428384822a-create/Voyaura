@@ -23,7 +23,7 @@ async function post(request: APIRequestContext, path: string, data: object) {
   return response.json()
 }
 function screenshots() {
-  const path = new URL('../../docs/design/round2/flow-screenshots/', import.meta.url)
+  const path = new URL('../../docs/design/round2-split/flow-screenshots/', import.meta.url)
   mkdirSync(path, { recursive: true })
   return path
 }
@@ -60,6 +60,29 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   await page.locator('.day-tabs button').nth(1).click()
   await expect(page.locator('.day-heading')).toContainText('第 2 天')
   await page.locator('.day-tabs button').first().click()
+  if (testInfo.project.name === 'desktop') {
+    await expect(page.locator('.plan-panels.is-split')).toBeVisible()
+    await expect(page.locator('#schedule-panel')).toBeVisible()
+    await expect(page.locator('#map-panel')).toBeVisible()
+  }
+  // One map follows the same day and stop as the itinerary, on desktop and phone.
+  await page.locator('.day-timeline .stop-dot').first().click()
+  await expect(page.locator('.agent-map')).toBeVisible()
+  await expect(page.locator('.agent-map')).toHaveCount(1)
+  await expect(page.locator('.map-selection h4')).toContainText('博物馆A')
+  const secondDayPoint = page
+    .locator('.agent-map')
+    .getByRole('button', { name: /^地图地点：第2天第1站/ })
+  const secondDayName = (await secondDayPoint.getAttribute('aria-label'))!.split('站 ')[1]!
+  await secondDayPoint.focus()
+  await page.keyboard.press('Enter')
+  await expect(secondDayPoint).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.map-selection h4')).toHaveText(secondDayName)
+  await page.getByRole('button', { name: '查看对应行程', exact: true }).click()
+  await expect(page.locator('.day-heading')).toContainText('第 2 天')
+  await expect(page.locator('.day-timeline li.is-selected h3')).toHaveText(secondDayName)
+  await page.locator('.day-tabs button').first().click()
+  await expect(page.locator('.map-selection')).toHaveCount(0)
   await expect(page.locator('.day-timeline')).toContainText('你提供的地点')
   await expect(page.locator('.unknown-card')).toContainText('未知')
   await page.getByRole('tab', { name: '地点地图', exact: true }).click()
@@ -68,6 +91,8 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   await page.locator('.replan-form input').fill('16:00')
   await page.getByRole('button', { name: '重新安排并检查', exact: true }).click()
   await expect(page.locator('.revision-label')).toContainText('2')
+  await page.locator('.day-timeline .stop-dot').first().click()
+  await page.getByRole('button', { name: '查看对应行程', exact: true }).click()
   await page.locator('.replan-form input').blur()
   await page
     .locator('.workspace-scroll')
@@ -79,7 +104,10 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   const viewports =
     testInfo.project.name === 'desktop'
       ? ([
+          ['wide', 1600, 1000],
           ['desktop', 1440, 1000],
+          ['threshold', 1280, 1000],
+          ['below-threshold', 1279, 1000],
           ['tablet', 768, 1024],
           ['narrow', 320, 812],
         ] as const)
@@ -87,6 +115,13 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   const checks = []
   for (const [name, width, height] of viewports) {
     await page.setViewportSize({ width, height })
+    if (width >= 1280) {
+      await expect(page.locator('.plan-panels.is-split')).toBeVisible()
+      await expect(page.locator('.agent-map')).toHaveCount(1)
+    } else {
+      await expect(page.locator('.plan-panels.is-split')).toHaveCount(0)
+      await expect(page.locator('.agent-map')).toHaveCount(0)
+    }
     await page
       .locator('.result-column')
       .evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }))
@@ -101,12 +136,27 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
     })
     expect(layout.scrollWidth, `result ${name} overflow`).toBeLessThanOrEqual(layout.clientWidth)
     expect(layout.documentWidth).toBeLessThanOrEqual(width)
+    const scheduleBox = await page.locator('#schedule-panel').boundingBox()
+    const mapBox = width >= 1280 ? await page.locator('#map-panel').boundingBox() : null
+    if (mapBox && scheduleBox) {
+      expect(mapBox.x).toBeGreaterThanOrEqual(scheduleBox.x + scheduleBox.width + 15)
+      expect(Math.abs(mapBox.y - scheduleBox.y)).toBeLessThanOrEqual(2)
+      expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(width)
+    }
     await page.screenshot({ path: fileURLToPath(new URL(`journey-${name}.png`, screenshots())) })
-    checks.push({ name, width, height, layout })
+    checks.push({
+      name,
+      width,
+      height,
+      mode: width >= 1280 ? 'split' : 'tabs',
+      layout,
+      scheduleBox,
+      mapBox,
+    })
   }
   writeFileSync(
     new URL(
-      `../../docs/design/round2/result-${testInfo.project.name}-viewport-check.json`,
+      `../../docs/design/round2-split/result-${testInfo.project.name}-viewport-check.json`,
       import.meta.url,
     ),
     JSON.stringify(checks, null, 2),

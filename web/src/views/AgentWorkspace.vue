@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   ArrowLeft,
   ArrowRight,
@@ -120,6 +120,13 @@ const confirmationAnchor = ref<HTMLElement | null>(null)
 const candidateDetails = ref<HTMLDetailsElement | null>(null)
 const editingBrief = ref(false)
 const resultTab = ref<'schedule' | 'map' | 'execution'>('schedule')
+const splitQuery = window.matchMedia?.('(min-width: 1280px)')
+const isWideScreen = ref(splitQuery?.matches ?? false)
+const selectedStopId = ref<string | null>(null)
+const mapPanel = ref<HTMLElement | null>(null)
+function syncSplitScreen(event: MediaQueryListEvent) {
+  isWideScreen.value = event.matches
+}
 const interestOptions = ['自然风光', '历史街区', '博物馆', '美食', '海边', '公园']
 const hasPlan = computed(
   () =>
@@ -127,6 +134,11 @@ const hasPlan = computed(
     !['needs_input', 'failed', 'running'].includes(run.value.status) &&
     !!run.value.result.days?.some((day) => day.stops.length > 0),
 )
+const inlineMap = computed(
+  () =>
+    hasPlan.value && isWideScreen.value && resultTab.value === 'schedule' && !editingBrief.value,
+)
+const mapVisible = computed(() => hasPlan.value && (inlineMap.value || resultTab.value === 'map'))
 const contextCityCode = computed(() =>
   hasPlan.value ? String(run.value?.request.city_adcode ?? cityCode.value) : cityCode.value,
 )
@@ -257,6 +269,41 @@ const currentDay = computed(
   () =>
     run.value?.result.days?.find((d) => d.day === activeDay.value) ?? run.value?.result.days?.[0],
 )
+const selectedStop = computed(() =>
+  currentDay.value?.stops.find((stop) => stop.candidate_id === selectedStopId.value),
+)
+watch(activeDay, () => {
+  if (!selectedStop.value) selectedStopId.value = null
+})
+async function locateStop(id: string) {
+  if (!currentDay.value?.stops.some((stop) => stop.candidate_id === id)) return
+  selectedStopId.value = id
+  if (!inlineMap.value) {
+    resultTab.value = 'map'
+    await nextTick()
+    scrollTo(mapPanel.value)
+  }
+}
+function selectMapStop(point: { day: number; candidateId: string }) {
+  const day = run.value?.result.days?.find((day) => day.day === point.day)
+  if (!day?.stops.some((stop) => stop.candidate_id === point.candidateId)) return
+  activeDay.value = point.day
+  selectedStopId.value = point.candidateId
+}
+async function revealSelectedStop() {
+  if (!selectedStop.value) return
+  resultTab.value = 'schedule'
+  await nextTick()
+  const item = Array.from(
+    resultAnchor.value?.querySelectorAll<HTMLElement>('[data-stop-id]') ?? [],
+  ).find((el) => el.dataset.stopId === selectedStopId.value)
+  item?.scrollIntoView?.({
+    block: 'nearest',
+    behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      ? 'instant'
+      : 'smooth',
+  })
+}
 const statusText = computed(() => {
   if (run.value?.status === 'confirmed') return '已保存到私人档案'
   if (run.value?.status === 'running') return '任务正在执行 · 可稍后刷新'
@@ -293,6 +340,7 @@ function useRun(value: AgentRun) {
   activeDay.value = value.result.days?.[0]?.day ?? 1
   editingBrief.value = false
   resultTab.value = 'schedule'
+  selectedStopId.value = null
   clearConfirmation()
   void nextTick(() => scrollTo(resultAnchor.value))
 }
@@ -308,12 +356,14 @@ async function loadHistory() {
   }
 }
 onMounted(async () => {
+  splitQuery?.addEventListener?.('change', syncSplitScreen)
   const results = await Promise.allSettled([getAgentCapabilities(), listAgentRuns()])
   if (results[0].status === 'fulfilled') capabilities.value = results[0].value
   else capabilitiesUnavailable.value = true
   if (results[1].status === 'fulfilled') history.value = results[1].value.items
   else reportError(results[1].reason)
 })
+onBeforeUnmount(() => splitQuery?.removeEventListener?.('change', syncSplitScreen))
 watch(
   () => props.initialKind,
   (v) => {
@@ -606,7 +656,12 @@ function eventLabel(status: string) {
         </section>
         <div
           class="workspace-grid"
-          :class="{ 'has-plan': hasPlan, 'has-run': !!run, 'editing-brief': editingBrief }"
+          :class="{
+            'has-plan': hasPlan,
+            'has-run': !!run,
+            'editing-brief': editingBrief,
+            'has-inline-map': inlineMap,
+          }"
         >
           <aside class="brief-column">
             <section
@@ -1256,147 +1311,214 @@ function eventLabel(status: string) {
                     <ListChecks :size="16" />执行记录<span>{{ run.events.length }}</span>
                   </button>
                 </div>
-                <section
-                  id="schedule-panel"
-                  v-show="resultTab === 'schedule'"
-                  class="schedule-panel"
-                  role="tabpanel"
-                  aria-labelledby="schedule-tab"
-                >
-                  <div class="day-tabs" role="group" aria-label="每日行程">
-                    <button
-                      v-for="day in run.result.days"
-                      :key="day.day"
-                      type="button"
-                      :class="{ active: activeDay === day.day }"
-                      :aria-pressed="activeDay === day.day"
-                      @click="activeDay = day.day"
-                    >
-                      <small>DAY {{ String(day.day).padStart(2, '0') }}</small
-                      ><strong>{{ day.date.slice(5).replace('-', ' / ') }}</strong
-                      ><span>{{ day.stops.length }} 个地点</span>
-                    </button>
-                  </div>
-                  <div v-if="currentDay" class="day-heading">
-                    <div>
-                      <p class="eyebrow">A DAY TO REMEMBER</p>
-                      <h3>
-                        第 {{ currentDay.day }} 天，慢慢走进{{ contextCity.replace(/市$/, '') }}。
-                      </h3>
-                    </div>
-                    <span>{{ currentDay.start }} — {{ currentDay.end }}</span>
-                  </div>
-                  <ol v-if="currentDay" class="day-timeline">
-                    <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
-                      <div class="stop-time">
-                        <strong>{{ stop.arrival }}</strong
-                        ><small>{{ stop.departure }}</small>
-                      </div>
-                      <span class="stop-dot">{{ index + 1 }}</span>
-                      <article>
-                        <div>
-                          <h3>{{ stop.name }}</h3>
-                          <button
-                            v-if="run.status !== 'confirmed'"
-                            class="text-button remove-stop"
-                            type="button"
-                            :disabled="busy"
-                            :aria-label="`从草案移除${stop.name}`"
-                            @click="editDraft(stop.candidate_id)"
-                          >
-                            <Trash2 :size="13" />移除
-                          </button>
-                        </div>
-                        <p>
-                          <span class="source-chip"
-                            ><MapPin :size="11" />{{ sourceLabel(stop.source) }}</span
-                          ><span><Clock3 :size="11" />停留 {{ stop.stay_minutes }} 分钟</span>
-                        </p>
-                        <small v-if="stop.timing_basis === 'planning_buffer'"
-                          >时间含规划预留，交通尚需核实</small
-                        ><small v-else>{{
-                          index === 0 ? '按你设置的开始时间安排' : '按已查询交通时间安排'
-                        }}</small>
-                      </article>
-                    </li>
-                    <li v-if="!currentDay.stops.length" class="empty-day">
-                      这一天还没有安排地点，可继续补充。
-                    </li>
-                  </ol>
-                  <div v-if="run.result.validation" class="budget-summary">
-                    <span class="budget-symbol"><Wallet :size="20" /></span>
-                    <div>
-                      <small>景点费用，先心里有数</small
-                      ><strong>已知 ¥{{ run.result.validation.known_cost_yuan }}</strong>
-                    </div>
-                    <span
-                      >{{
-                        run.result.validation.unknown_cost_count
-                      }}
-                      项票价未知<br />不含住宿、餐饮与交通</span
-                    >
-                  </div>
-                  <form
-                    v-if="run.status !== 'confirmed'"
-                    class="replan-form"
-                    @submit.prevent="editDraft()"
+                <div class="plan-panels" :class="{ 'is-split': inlineMap }">
+                  <section
+                    id="schedule-panel"
+                    v-show="resultTab === 'schedule'"
+                    class="schedule-panel"
+                    role="tabpanel"
+                    aria-labelledby="schedule-tab"
                   >
-                    <div>
-                      <strong>给这一天，多留一点空白</strong
-                      ><label
-                        >想早点结束？<input
-                          v-model="revisedEnd"
-                          type="time"
-                          required
-                          aria-label="调整每天结束时间"
-                      /></label>
+                    <div class="day-tabs" role="group" aria-label="每日行程">
+                      <button
+                        v-for="day in run.result.days"
+                        :key="day.day"
+                        type="button"
+                        :class="{ active: activeDay === day.day }"
+                        :aria-pressed="activeDay === day.day"
+                        @click="activeDay = day.day"
+                      >
+                        <small>DAY {{ String(day.day).padStart(2, '0') }}</small
+                        ><strong>{{ day.date.slice(5).replace('-', ' / ') }}</strong
+                        ><span>{{ day.stops.length }} 个地点</span>
+                      </button>
                     </div>
-                    <button class="secondary-action" type="submit" :disabled="busy">
-                      <RefreshCw :size="14" />重新安排并检查
-                    </button>
-                  </form>
-                </section>
-                <section
-                  id="map-panel"
-                  v-show="resultTab === 'map'"
-                  class="map-panel"
-                  role="tabpanel"
-                  aria-labelledby="map-tab"
-                >
-                  <header class="panel-heading">
-                    <div>
-                      <h3>把沿途的地点，放在一起看。</h3>
-                      <p>地图展示候选地点与游览顺序，交通和导航信息仍需核实。</p>
+                    <div v-if="currentDay" class="day-heading">
+                      <div>
+                        <p class="eyebrow">A DAY TO REMEMBER</p>
+                        <h3>
+                          第 {{ currentDay.day }} 天，慢慢走进{{ contextCity.replace(/市$/, '') }}。
+                        </h3>
+                      </div>
+                      <span>{{ currentDay.start }} — {{ currentDay.end }}</span>
                     </div>
-                    <Map :size="23" />
-                  </header>
-                  <AgentRouteMap
-                    v-if="resultTab === 'map'"
-                    :days="run.result.days ?? []"
-                    :active-day="activeDay"
-                    :allow-external="run.request.allow_external === true"
-                  />
-                  <div class="map-day-selector" role="group" aria-label="地图查看日期">
-                    <button
-                      v-for="day in run.result.days"
-                      :key="day.day"
-                      type="button"
-                      :class="{ active: activeDay === day.day }"
-                      :aria-pressed="activeDay === day.day"
-                      @click="activeDay = day.day"
+                    <ol v-if="currentDay" class="day-timeline">
+                      <li
+                        v-for="(stop, index) in currentDay.stops"
+                        :key="stop.candidate_id"
+                        :data-stop-id="stop.candidate_id"
+                        :class="{ 'is-selected': selectedStopId === stop.candidate_id }"
+                      >
+                        <div class="stop-time">
+                          <strong>{{ stop.arrival }}</strong
+                          ><small>{{ stop.departure }}</small>
+                        </div>
+                        <button
+                          class="stop-dot"
+                          type="button"
+                          :aria-label="`在地图中查看${stop.name}`"
+                          :aria-pressed="selectedStopId === stop.candidate_id"
+                          @click="locateStop(stop.candidate_id)"
+                        >
+                          {{ index + 1 }}
+                        </button>
+                        <article>
+                          <div>
+                            <h3>{{ stop.name }}</h3>
+                            <button
+                              v-if="run.status !== 'confirmed'"
+                              class="text-button remove-stop"
+                              type="button"
+                              :disabled="busy"
+                              :aria-label="`从草案移除${stop.name}`"
+                              @click="editDraft(stop.candidate_id)"
+                            >
+                              <Trash2 :size="13" />移除
+                            </button>
+                          </div>
+                          <p>
+                            <span class="source-chip"
+                              ><MapPin :size="11" />{{ sourceLabel(stop.source) }}</span
+                            ><span><Clock3 :size="11" />停留 {{ stop.stay_minutes }} 分钟</span>
+                          </p>
+                          <small v-if="stop.timing_basis === 'planning_buffer'"
+                            >时间含规划预留，交通尚需核实</small
+                          ><small v-else>{{
+                            index === 0 ? '按你设置的开始时间安排' : '按已查询交通时间安排'
+                          }}</small>
+                        </article>
+                      </li>
+                      <li v-if="!currentDay.stops.length" class="empty-day">
+                        这一天还没有安排地点，可继续补充。
+                      </li>
+                    </ol>
+                    <div v-if="run.result.validation" class="budget-summary">
+                      <span class="budget-symbol"><Wallet :size="20" /></span>
+                      <div>
+                        <small>景点费用，先心里有数</small
+                        ><strong>已知 ¥{{ run.result.validation.known_cost_yuan }}</strong>
+                      </div>
+                      <span
+                        >{{
+                          run.result.validation.unknown_cost_count
+                        }}
+                        项票价未知<br />不含住宿、餐饮与交通</span
+                      >
+                    </div>
+                    <form
+                      v-if="run.status !== 'confirmed'"
+                      class="replan-form"
+                      @submit.prevent="editDraft()"
                     >
-                      第 {{ day.day }} 天 · {{ day.stops.length }} 个地点
-                    </button>
-                  </div>
-                  <ol v-if="currentDay" class="map-stop-list">
-                    <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
-                      <span>{{ index + 1 }}</span
-                      ><strong>{{ stop.name }}</strong
-                      ><small>{{ stop.arrival }} · {{ sourceLabel(stop.source) }}</small>
-                    </li>
-                  </ol>
-                </section>
-              </template>
+                      <div>
+                        <strong>给这一天，多留一点空白</strong
+                        ><label
+                          >想早点结束？<input
+                            v-model="revisedEnd"
+                            type="time"
+                            required
+                            aria-label="调整每天结束时间"
+                        /></label>
+                      </div>
+                      <button class="secondary-action" type="submit" :disabled="busy">
+                        <RefreshCw :size="14" />重新安排并检查
+                      </button>
+                    </form>
+                  </section>
+                  <section
+                    id="map-panel"
+                    ref="mapPanel"
+                    v-show="mapVisible"
+                    class="map-panel"
+                    :class="{ 'map-panel--inline': inlineMap }"
+                    :role="inlineMap ? 'region' : 'tabpanel'"
+                    :aria-labelledby="inlineMap ? 'inline-map-title' : 'map-tab'"
+                  >
+                    <header class="panel-heading">
+                      <div>
+                        <p v-if="inlineMap" class="map-eyebrow">THE PLACES ALONG THE WAY</p>
+                        <h3 id="inline-map-title">
+                          {{
+                            inlineMap
+                              ? `第 ${activeDay} 天 · 地点分布`
+                              : '把沿途的地点，放在一起看。'
+                          }}
+                        </h3>
+                        <p>
+                          {{
+                            inlineMap
+                              ? '点选地图编号，对照当天的行程。'
+                              : '地图展示地点与游览顺序，交通和导航信息仍需核实。'
+                          }}
+                        </p>
+                      </div>
+                      <button
+                        v-if="inlineMap"
+                        class="map-expand icon-button"
+                        type="button"
+                        aria-label="展开地点地图"
+                        @click="resultTab = 'map'"
+                      >
+                        <ArrowUpRight :size="17" /></button
+                      ><Map v-else :size="23" />
+                    </header>
+                    <AgentRouteMap
+                      v-if="mapVisible"
+                      :days="run.result.days ?? []"
+                      :active-day="activeDay"
+                      :allow-external="run.request.allow_external === true"
+                      :selected-stop-id="selectedStopId"
+                      :compact="inlineMap"
+                      @select="selectMapStop"
+                    />
+                    <div class="map-day-selector" role="group" aria-label="地图查看日期">
+                      <button
+                        v-for="day in run.result.days"
+                        :key="day.day"
+                        type="button"
+                        :class="{ active: activeDay === day.day }"
+                        :aria-pressed="activeDay === day.day"
+                        @click="activeDay = day.day"
+                      >
+                        第 {{ day.day }} 天 · {{ day.stops.length }} 个地点
+                      </button>
+                    </div>
+                    <div v-if="selectedStop" class="map-selection" aria-live="polite">
+                      <span class="selection-kicker"><MapPin :size="12" />与行程同步选中</span>
+                      <h4>{{ selectedStop.name }}</h4>
+                      <p>
+                        {{ selectedStop.arrival }} — {{ selectedStop.departure }} ·
+                        {{ sourceLabel(selectedStop.source) }}
+                      </p>
+                      <button class="text-button" type="button" @click="revealSelectedStop">
+                        查看对应行程<ArrowRight :size="13" />
+                      </button>
+                    </div>
+                    <ol v-if="currentDay" class="map-stop-list">
+                      <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
+                        <button
+                          type="button"
+                          :class="{ selected: selectedStopId === stop.candidate_id }"
+                          :aria-pressed="selectedStopId === stop.candidate_id"
+                          :aria-label="`选中地图地点${stop.name}`"
+                          @click="selectMapStop({ day: activeDay, candidateId: stop.candidate_id })"
+                        >
+                          <span>{{ index + 1 }}</span
+                          ><span
+                            ><strong>{{ stop.name }}</strong
+                            ><small
+                              >{{ stop.arrival }} · {{ sourceLabel(stop.source) }}</small
+                            ></span
+                          ><MapPin :size="13" />
+                        </button>
+                      </li>
+                    </ol>
+                    <p v-if="currentDay && !currentDay.stops.length" class="map-empty-day">
+                      这一天还没有安排地点，地图保留其他日期的坐标供对照。
+                    </p>
+                  </section>
+                </div></template
+              >
               <template v-if="run.kind === 'story' && run.result.story_body"
                 ><div class="story-paper">
                   <p class="eyebrow">FIELD NOTES · A PRIVATE STORY</p>
