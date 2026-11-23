@@ -59,10 +59,17 @@ const props = defineProps<{
   initialKind?: 'plan' | 'story'
   initialCity?: string
   initialIntent?: DiscoveryIntent | null
+  initialDate?: string
+  archiveCities?: Array<{ adcode: string; name_zh: string }>
 }>()
-const emit = defineEmits<{ back: []; connect: []; routeTools: [] }>()
+const emit = defineEmits<{
+  back: []
+  connect: []
+  routeTools: []
+  memories: []
+}>()
 const mode = ref<'plan' | 'story'>(props.initialKind ?? 'plan')
-const cities = [
+const defaultCities = [
   { code: '440100', name: '广州市' },
   { code: '330100', name: '杭州市' },
   { code: '310000', name: '上海市' },
@@ -70,12 +77,29 @@ const cities = [
   { code: '510100', name: '成都市' },
   { code: '350200', name: '厦门市' },
 ]
-const cityCode = ref(props.initialIntent?.cityAdcode ?? props.initialCity ?? '440100')
+const cities = computed(() => [
+  ...new globalThis.Map(
+    [
+      ...defaultCities,
+      ...(props.archiveCities ?? []).map((city) => ({
+        code: city.adcode,
+        name: city.name_zh,
+      })),
+    ].map((city) => [city.code, city]),
+  ).values(),
+])
+const cityCode = ref(
+  props.initialIntent?.cityAdcode ?? props.initialCity ?? '440100',
+)
 const goal = ref(props.initialIntent?.goal ?? '')
 const localDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
   .toISOString()
   .slice(0, 10)
-const startDate = ref(localDate)
+const startDate = ref(
+  props.initialDate && /^\d{4}-\d{2}-\d{2}$/.test(props.initialDate)
+    ? props.initialDate
+    : localDate,
+)
 const days = ref(props.initialIntent?.days ?? 2)
 const budget = ref<number | ''>('')
 const dailyStart = ref('09:00')
@@ -129,7 +153,8 @@ const practiceBackup = ref<ReturnType<typeof captureBrief> | null>(null)
 const practiceNotice = ref<HTMLElement | null>(null)
 const inputPractice = computed(
   () =>
-    mode.value === 'plan' && isPracticeRequest({ goal: goal.value, candidates: candidates.value }),
+    mode.value === 'plan' &&
+    isPracticeRequest({ goal: goal.value, candidates: candidates.value }),
 )
 const resultPractice = computed(
   () => run.value?.kind === 'plan' && isPracticeRequest(run.value.request),
@@ -244,7 +269,14 @@ const mapPanel = ref<HTMLElement | null>(null)
 function syncSplitScreen(event: MediaQueryListEvent) {
   isWideScreen.value = event.matches
 }
-const interestOptions = ['自然风光', '历史街区', '博物馆', '美食', '海边', '公园']
+const interestOptions = [
+  '自然风光',
+  '历史街区',
+  '博物馆',
+  '美食',
+  '海边',
+  '公园',
+]
 const hasPlan = computed(
   () =>
     run.value?.kind === 'plan' &&
@@ -253,16 +285,27 @@ const hasPlan = computed(
 )
 const inlineMap = computed(
   () =>
-    hasPlan.value && isWideScreen.value && resultTab.value === 'schedule' && !editingBrief.value,
+    hasPlan.value &&
+    isWideScreen.value &&
+    resultTab.value === 'schedule' &&
+    !editingBrief.value,
 )
-const mapVisible = computed(() => hasPlan.value && (inlineMap.value || resultTab.value === 'map'))
+const mapVisible = computed(
+  () => hasPlan.value && (inlineMap.value || resultTab.value === 'map'),
+)
 const contextCityCode = computed(() =>
-  hasPlan.value ? String(run.value?.request.city_adcode ?? cityCode.value) : cityCode.value,
+  hasPlan.value
+    ? String(run.value?.request.city_adcode ?? cityCode.value)
+    : cityCode.value,
 )
 const contextCity = computed(
-  () => cities.find((c) => c.code === contextCityCode.value)?.name ?? '这段旅程',
+  () =>
+    cities.value.find((c) => c.code === contextCityCode.value)?.name ??
+    '这段旅程',
 )
-const contextPhoto = computed(() => destinations.find((d) => d.adcode === contextCityCode.value))
+const contextPhoto = computed(() =>
+  destinations.find((d) => d.adcode === contextCityCode.value),
+)
 const summaryGoal = computed(() =>
   hasPlan.value ? String(run.value?.request.goal ?? goal.value) : goal.value,
 )
@@ -275,13 +318,18 @@ const summaryDays = computed(() =>
     : days.value,
 )
 const placeCount = computed(
-  () => run.value?.result.days?.reduce((total, day) => total + day.stops.length, 0) ?? 0,
+  () =>
+    run.value?.result.days?.reduce(
+      (total, day) => total + day.stops.length,
+      0,
+    ) ?? 0,
 )
 const taskPhase = computed(() => {
   if (busy.value && pendingRequest.value) return 'working'
   if (run.value?.status === 'confirmed') return 'saved'
   if (run.value?.status === 'running') return 'working'
-  if (run.value?.status === 'needs_input' || run.value?.status === 'failed') return 'blocked'
+  if (run.value?.status === 'needs_input' || run.value?.status === 'failed')
+    return 'blocked'
   if (run.value) return 'review'
   return 'brief'
 })
@@ -294,7 +342,8 @@ async function onResultTabKeydown(event: KeyboardEvent) {
       ? 0
       : event.key === 'End'
         ? 2
-        : (index + (event.key === 'ArrowRight' ? 1 : -1) + views.length) % views.length
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + views.length) %
+          views.length
   const tabs = event.currentTarget as HTMLElement
   event.preventDefault()
   resultTab.value = views[next]!
@@ -363,7 +412,11 @@ function restoreBrief(value: AgentRun) {
   budget.value = typeof q.budget_yuan === 'number' ? q.budget_yuan : ''
   if (typeof q.daily_start === 'string') dailyStart.value = q.daily_start
   if (typeof q.daily_end === 'string') dailyEnd.value = q.daily_end
-  if (q.transport === 'walking' || q.transport === 'transit' || q.transport === 'driving')
+  if (
+    q.transport === 'walking' ||
+    q.transport === 'transit' ||
+    q.transport === 'driving'
+  )
     transport.value = q.transport
   if (q.pace === 'relaxed' || q.pace === 'balanced') pace.value = q.pace
   interests.value = Array.isArray(q.interests)
@@ -372,7 +425,9 @@ function restoreBrief(value: AgentRun) {
   mustVisit.value = Array.isArray(q.must_visit)
     ? q.must_visit.filter((i) => typeof i === 'string').join('，')
     : ''
-  candidates.value = Array.isArray(q.candidates) ? q.candidates.map((c) => ({ ...c })) : []
+  candidates.value = Array.isArray(q.candidates)
+    ? q.candidates.map((c) => ({ ...c }))
+    : []
   allowExternal.value = false
   allowModel.value = false
   allowMemory.value = false
@@ -380,14 +435,19 @@ function restoreBrief(value: AgentRun) {
 const canSave = computed(
   () =>
     run.value?.status === 'awaiting_confirmation' &&
-    !['conflict', 'information_missing'].includes(run.value.result.verification_status),
+    !['conflict', 'information_missing'].includes(
+      run.value.result.verification_status,
+    ),
 )
 const currentDay = computed(
   () =>
-    run.value?.result.days?.find((d) => d.day === activeDay.value) ?? run.value?.result.days?.[0],
+    run.value?.result.days?.find((d) => d.day === activeDay.value) ??
+    run.value?.result.days?.[0],
 )
 const selectedStop = computed(() =>
-  currentDay.value?.stops.find((stop) => stop.candidate_id === selectedStopId.value),
+  currentDay.value?.stops.find(
+    (stop) => stop.candidate_id === selectedStopId.value,
+  ),
 )
 watch(activeDay, () => {
   if (!selectedStop.value) selectedStopId.value = null
@@ -403,7 +463,8 @@ async function locateStop(id: string) {
 }
 function selectMapStop(point: { day: number; candidateId: string }) {
   const day = run.value?.result.days?.find((day) => day.day === point.day)
-  if (!day?.stops.some((stop) => stop.candidate_id === point.candidateId)) return
+  if (!day?.stops.some((stop) => stop.candidate_id === point.candidateId))
+    return
   activeDay.value = point.day
   selectedStopId.value = point.candidateId
 }
@@ -432,7 +493,8 @@ const statusText = computed(() => {
     information_missing: '信息不足 · 请补充',
   }[run.value?.result.verification_status ?? 'information_missing']
 })
-const sourceLabel = (source: string) => (source === 'amap' ? '高德查询' : '你提供的地点')
+const sourceLabel = (source: string) =>
+  source === 'amap' ? '高德查询' : '你提供的地点'
 function clearConfirmation() {
   confirmation.value = null
   acknowledged.value = false
@@ -444,8 +506,10 @@ function useRun(value: AgentRun) {
     result: {
       ...value.result,
       intent_source: value.result?.intent_source ?? 'local_rules',
-      verification_status: value.result?.verification_status ?? 'information_missing',
-      summary: value.result?.summary ?? '任务尚无可用结果，请查看执行记录或刷新状态。',
+      verification_status:
+        value.result?.verification_status ?? 'information_missing',
+      summary:
+        value.result?.summary ?? '任务尚无可用结果，请查看执行记录或刷新状态。',
       warnings: value.result?.warnings ?? [],
       unknowns: value.result?.unknowns ?? [],
     },
@@ -474,13 +538,18 @@ async function loadHistory() {
 }
 onMounted(async () => {
   splitQuery?.addEventListener?.('change', syncSplitScreen)
-  const results = await Promise.allSettled([getAgentCapabilities(), listAgentRuns()])
+  const results = await Promise.allSettled([
+    getAgentCapabilities(),
+    listAgentRuns(),
+  ])
   if (results[0].status === 'fulfilled') capabilities.value = results[0].value
   else capabilitiesUnavailable.value = true
   if (results[1].status === 'fulfilled') history.value = results[1].value.items
   else reportError(results[1].reason)
 })
-onBeforeUnmount(() => splitQuery?.removeEventListener?.('change', syncSplitScreen))
+onBeforeUnmount(() =>
+  splitQuery?.removeEventListener?.('change', syncSplitScreen),
+)
 watch(
   () => props.initialKind,
   (v) => {
@@ -544,7 +613,9 @@ function buildRequest(): RunCreate {
     kind: mode.value,
     goal: goal.value.trim(),
     city_adcode: cityCode.value,
-    city_name: cities.find((c) => c.code === cityCode.value)?.name ?? cityCode.value,
+    city_name:
+      cities.value.find((c) => c.code === cityCode.value)?.name ??
+      cityCode.value,
     start_date: startDate.value,
     days: Number(days.value),
     daily_start: dailyStart.value,
@@ -563,8 +634,10 @@ function buildRequest(): RunCreate {
             stay_minutes: Number(c.stay_minutes),
           }))
         : [],
-    allow_external: mode.value === 'plan' && allowExternal.value && !inputPractice.value,
-    allow_model: mode.value === 'plan' && allowModel.value && !inputPractice.value,
+    allow_external:
+      mode.value === 'plan' && allowExternal.value && !inputPractice.value,
+    allow_model:
+      mode.value === 'plan' && allowModel.value && !inputPractice.value,
     allow_memory_access: mode.value === 'story' && allowMemory.value,
     memory_ids: [],
   }
@@ -579,7 +652,8 @@ async function submit(retry = false) {
     error.value = '先告诉小曦，这次想怎样旅行或整理回忆。'
     return
   }
-  const payload = retry && pendingRequest.value ? pendingRequest.value : buildRequest()
+  const payload =
+    retry && pendingRequest.value ? pendingRequest.value : buildRequest()
   pendingRequest.value = payload
   busy.value = true
   error.value = ''
@@ -591,7 +665,10 @@ async function submit(retry = false) {
     let created = await createAgentRun(payload)
     if (
       payload.kind === 'plan' &&
-      isPracticeRequest({ goal: payload.goal, candidates: payload.candidates }) &&
+      isPracticeRequest({
+        goal: payload.goal,
+        candidates: payload.candidates,
+      }) &&
       ['awaiting_confirmation', 'needs_input'].includes(created.status) &&
       !created.title.startsWith(PRACTICE_MARKER)
     ) {
@@ -645,7 +722,9 @@ async function editDraft(excluded?: string) {
               ? {
                   excluded_candidate_ids: Array.from(
                     new Set([
-                      ...(Array.isArray(run.value.request.excluded_candidate_ids)
+                      ...(Array.isArray(
+                        run.value.request.excluded_candidate_ids,
+                      )
                         ? run.value.request.excluded_candidate_ids.filter(
                             (id): id is string => typeof id === 'string',
                           )
@@ -685,7 +764,9 @@ async function save() {
   busy.value = true
   error.value = ''
   try {
-    useRun(await confirmAgentRun(run.value, confirmation.value, acknowledged.value))
+    useRun(
+      await confirmAgentRun(run.value, confirmation.value, acknowledged.value),
+    )
     await loadHistory()
   } catch (e) {
     reportError(e)
@@ -715,8 +796,8 @@ function eventLabel(status: string) {
 <template>
   <main
     class="agent-workspace"
-    :class="{ 'showing-plan': hasPlan }"
-    aria-label="小曦旅行规划工作台"
+    :class="{ 'showing-plan': hasPlan, 'story-workspace': mode === 'story' }"
+    :aria-label="mode === 'story' ? '小曦旅行故事工作台' : '小曦旅行规划工作台'"
   >
     <div class="workspace-scroll">
       <div class="workspace-container">
@@ -725,20 +806,32 @@ function eventLabel(status: string) {
             <button
               class="icon-button back-button"
               type="button"
-              aria-label="返回发现首页"
+              :aria-label="mode === 'story' ? '返回城市记忆' : '返回发现首页'"
               @click="emit('back')"
             >
               <ArrowLeft :size="19" />
             </button>
             <div>
               <p class="eyebrow">
-                {{ mode === 'plan' ? 'MAKE ROOM FOR THE JOURNEY' : 'KEEP THE MOMENTS CLOSE' }}
+                {{
+                  mode === 'plan'
+                    ? 'MAKE ROOM FOR THE JOURNEY'
+                    : 'KEEP THE MOMENTS CLOSE'
+                }}
               </p>
-              <h1>{{ mode === 'plan' ? '把心动，安排成旅程。' : '小曦旅行手记' }}</h1>
+              <h1>
+                {{
+                  mode === 'plan'
+                    ? '把心动，安排成旅程。'
+                    : '把回忆，写成自己的故事。'
+                }}
+              </h1>
             </div>
           </div>
           <div class="workspace-header-actions">
-            <span class="private-badge"><ShieldCheck :size="15" />私人档案</span>
+            <span class="private-badge"
+              ><ShieldCheck :size="15" />私人档案</span
+            >
             <button
               class="history-toggle secondary-action"
               type="button"
@@ -747,10 +840,20 @@ function eventLabel(status: string) {
               :disabled="busy"
               @click="showHistory = !showHistory"
             >
-              <History :size="16" /><span>最近任务</span><b>{{ history.length }}</b>
+              <History :size="16" /><span>最近任务</span
+              ><b>{{ history.length }}</b>
             </button>
           </div>
         </header>
+        <section
+          v-if="mode === 'story'"
+          class="story-workflow-bar"
+          aria-label="故事整理流程"
+        >
+          <span><b>01</b>选择城市与日期</span><ChevronRight :size="15" /><span
+            ><b>02</b>授权读取与编辑</span
+          ><ChevronRight :size="15" /><span><b>03</b>核对后保存</span>
+        </section>
         <div v-if="mode === 'plan'" class="workflow-bar">
           <AgentWorkflowSteps :phase="taskPhase" /><span class="workflow-note"
             ><Sun :size="14" />和小曦，一步一步来</span
@@ -765,10 +868,17 @@ function eventLabel(status: string) {
           <div>
             <h2>先补上地点信息，再安排行程。</h2>
             <p>{{ placeSourceExplanation }}</p>
-            <small>没有地点来源时，任务会返回“信息不足”，地图、时间线和保存区暂不会出现。</small>
+            <small
+              >没有地点来源时，任务会返回“信息不足”，地图、时间线和保存区暂不会出现。</small
+            >
           </div>
           <div class="source-notice-actions">
-            <button class="secondary-action" type="button" :disabled="busy" @click="openCandidates">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy"
+              @click="openCandidates"
+            >
               补充自己的地点</button
             ><button
               class="primary-action"
@@ -786,7 +896,9 @@ function eventLabel(status: string) {
           class="practice-notice"
           aria-label="离线演练说明"
         >
-          <span class="practice-label"><Compass :size="15" />离线演练 · 虚拟地点</span>
+          <span class="practice-label"
+            ><Compass :size="15" />离线演练 · 虚拟地点</span
+          >
           <p>
             地点与坐标是明确标注的演示输入；使用真实接口生成规则草案，并可体验地图联动、执行记录和确认保存。本次不调用在线模型或地图查询。
           </p>
@@ -820,7 +932,12 @@ function eventLabel(status: string) {
               <p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p>
               <h2>接着上次的旅程</h2>
             </div>
-            <button class="text-button" type="button" :disabled="busy" @click="loadHistory">
+            <button
+              class="text-button"
+              type="button"
+              :disabled="busy"
+              @click="loadHistory"
+            >
               <RefreshCw :size="14" />刷新
             </button>
           </div>
@@ -837,7 +954,8 @@ function eventLabel(status: string) {
                 v-else
                 :size="17" /></span
             ><span>{{ item.title }}</span
-            ><small>{{ historyStatus(item.status) }} · 第{{ item.revision }}版</small
+            ><small
+              >{{ historyStatus(item.status) }} · 第{{ item.revision }}版</small
             ><ChevronRight :size="16" />
           </button>
         </section>
@@ -856,7 +974,10 @@ function eventLabel(status: string) {
               class="journey-brief-card"
               aria-label="本次旅行条件"
             >
-              <div class="journey-cover" :class="{ 'without-photo': !contextPhoto }">
+              <div
+                class="journey-cover"
+                :class="{ 'without-photo': !contextPhoto }"
+              >
                 <img
                   v-if="contextPhoto"
                   :src="contextPhoto.image"
@@ -886,13 +1007,22 @@ function eventLabel(status: string) {
                     </dd>
                   </div>
                 </dl>
-                <button class="secondary-action" type="button" :disabled="busy" @click="openBrief">
+                <button
+                  class="secondary-action"
+                  type="button"
+                  :disabled="busy"
+                  @click="openBrief"
+                >
                   <SlidersHorizontal :size="15" />调整旅行条件
                 </button>
                 <p class="summary-hint">调整条件后可以生成一份新草案。</p>
               </div>
             </section>
-            <div v-show="!hasPlan || editingBrief" ref="briefAnchor" class="brief-editor">
+            <div
+              v-show="!hasPlan || editingBrief"
+              ref="briefAnchor"
+              class="brief-editor"
+            >
               <button
                 v-if="hasPlan && editingBrief"
                 class="text-button editor-back"
@@ -928,12 +1058,19 @@ function eventLabel(status: string) {
                 @submit.prevent="submit(false)"
               >
                 <fieldset class="brief-fields" :disabled="busy">
-                  <section class="brief-card wish-card" aria-labelledby="wish-title">
+                  <section
+                    class="brief-card wish-card"
+                    aria-labelledby="wish-title"
+                  >
                     <header class="brief-card-heading">
                       <span class="section-number">01</span>
                       <div>
                         <h2 id="wish-title">
-                          {{ mode === 'plan' ? '先说说，你想怎样出发' : '想留下一段怎样的回忆' }}
+                          {{
+                            mode === 'plan'
+                              ? '先说说，你想怎样出发'
+                              : '想留下一段怎样的回忆'
+                          }}
                         </h2>
                         <p>
                           {{
@@ -947,7 +1084,9 @@ function eventLabel(status: string) {
                     </header>
                     <label class="field goal-field"
                       ><span>{{
-                        mode === 'plan' ? '这次想怎样旅行？' : '想留下一段怎样的回忆？'
+                        mode === 'plan'
+                          ? '这次想怎样旅行？'
+                          : '想留下一段怎样的回忆？'
                       }}</span
                       ><textarea
                         v-model="goal"
@@ -956,7 +1095,9 @@ function eventLabel(status: string) {
                         maxlength="1500"
                         rows="3"
                         :aria-label="
-                          mode === 'plan' ? '这次想怎样旅行？' : '想留下一段怎样的回忆？'
+                          mode === 'plan'
+                            ? '这次想怎样旅行？'
+                            : '想留下一段怎样的回忆？'
                         "
                         :placeholder="
                           mode === 'plan'
@@ -971,7 +1112,11 @@ function eventLabel(status: string) {
                       <span class="section-number">02</span>
                       <div>
                         <h2 id="basic-title">
-                          {{ mode === 'plan' ? '把时间和目的地定下来' : '选好这一段回忆' }}
+                          {{
+                            mode === 'plan'
+                              ? '把时间和目的地定下来'
+                              : '选好这一段回忆'
+                          }}
                         </h2>
                         <p>
                           {{
@@ -986,10 +1131,17 @@ function eventLabel(status: string) {
                       <label class="field"
                         ><span><MapPin :size="14" />目的地</span
                         ><select v-model="cityCode" aria-label="目的地">
-                          <option v-for="city in cities" :key="city.code" :value="city.code">
+                          <option
+                            v-for="city in cities"
+                            :key="city.code"
+                            :value="city.code"
+                          >
                             {{ city.name }}
                           </option>
-                          <option v-if="!cities.some((c) => c.code === cityCode)" :value="cityCode">
+                          <option
+                            v-if="!cities.some((c) => c.code === cityCode)"
+                            :value="cityCode"
+                          >
                             城市 {{ cityCode }}
                           </option>
                         </select></label
@@ -1002,7 +1154,9 @@ function eventLabel(status: string) {
                           v-model="startDate"
                           type="date"
                           required
-                          :aria-label="mode === 'plan' ? '出发日期' : '回忆开始日期'" /></label
+                          :aria-label="
+                            mode === 'plan' ? '出发日期' : '回忆开始日期'
+                          " /></label
                       ><label class="field"
                         ><span
                           ><Clock3 :size="14" />{{
@@ -1010,9 +1164,13 @@ function eventLabel(status: string) {
                           }}</span
                         ><select
                           v-model.number="days"
-                          :aria-label="mode === 'plan' ? '旅行天数' : '回忆时间范围'"
+                          :aria-label="
+                            mode === 'plan' ? '旅行天数' : '回忆时间范围'
+                          "
                         >
-                          <option v-for="n in 4" :key="n" :value="n">{{ n }} 天</option>
+                          <option v-for="n in 4" :key="n" :value="n">
+                            {{ n }} 天
+                          </option>
                         </select></label
                       ><label v-if="mode === 'plan'" class="field"
                         ><span><Wallet :size="14" />景点预算 / 元</span
@@ -1065,7 +1223,11 @@ function eventLabel(status: string) {
                           placeholder="博物馆，公园，历史街区"
                           aria-label="想逛什么"
                       /></label>
-                      <div class="interest-options" role="group" aria-label="旅行兴趣">
+                      <div
+                        class="interest-options"
+                        role="group"
+                        aria-label="旅行兴趣"
+                      >
                         <button
                           v-for="item in interestOptions"
                           :key="item"
@@ -1073,11 +1235,15 @@ function eventLabel(status: string) {
                           :aria-pressed="split(interests).includes(item)"
                           :class="{ selected: split(interests).includes(item) }"
                           :disabled="
-                            split(interests).length >= 3 && !split(interests).includes(item)
+                            split(interests).length >= 3 &&
+                            !split(interests).includes(item)
                           "
                           @click="toggleInterest(item)"
                         >
-                          <Check v-if="split(interests).includes(item)" :size="12" />{{ item }}
+                          <Check
+                            v-if="split(interests).includes(item)"
+                            :size="12"
+                          />{{ item }}
                         </button>
                       </div>
                       <details class="advanced-brief">
@@ -1097,7 +1263,11 @@ function eventLabel(status: string) {
                                 aria-label="每天开始" /></label
                             ><label class="field"
                               ><span>每天结束</span
-                              ><input v-model="dailyEnd" type="time" required aria-label="每天结束"
+                              ><input
+                                v-model="dailyEnd"
+                                type="time"
+                                required
+                                aria-label="每天结束"
                             /></label>
                           </div>
                           <label class="field"
@@ -1118,7 +1288,8 @@ function eventLabel(status: string) {
                         :open="candidates.length > 0"
                       >
                         <summary>
-                          <span class="candidate-symbol"><MapPin :size="18" /></span
+                          <span class="candidate-symbol"
+                            ><MapPin :size="18" /></span
                           ><span
                             ><strong>我已有想去的地点</strong
                             ><small>{{
@@ -1129,8 +1300,14 @@ function eventLabel(status: string) {
                           ><ChevronDown :size="16" />
                         </summary>
                         <div class="candidate-content">
-                          <p>填写你掌握的地点与 GCJ-02 坐标。系统会标注“你提供”，未经地图核验。</p>
-                          <fieldset v-for="(candidate, index) in candidates" :key="index">
+                          <p>
+                            填写你掌握的地点与 GCJ-02
+                            坐标。系统会标注“你提供”，未经地图核验。
+                          </p>
+                          <fieldset
+                            v-for="(candidate, index) in candidates"
+                            :key="index"
+                          >
                             <legend>地点 {{ index + 1 }}</legend>
                             <button
                               class="remove-candidate icon-button"
@@ -1206,7 +1383,9 @@ function eventLabel(status: string) {
                                   v-model="candidate.opening_start"
                                   type="time"
                                   aria-label="开放时间（可选）"
-                                  @change="candidate.opening_start ||= null" /></label
+                                  @change="
+                                    candidate.opening_start ||= null
+                                  " /></label
                               ><label class="field"
                                 ><span>闭馆时间（可选）</span
                                 ><input
@@ -1217,9 +1396,10 @@ function eventLabel(status: string) {
                               /></label>
                             </div>
                             <label class="consent compact"
-                              ><input v-model="candidate.must_visit" type="checkbox" /><span
-                                >这是必去地点</span
-                              ></label
+                              ><input
+                                v-model="candidate.must_visit"
+                                type="checkbox"
+                              /><span>这是必去地点</span></label
                             >
                           </fieldset>
                           <button
@@ -1233,7 +1413,10 @@ function eventLabel(status: string) {
                         </div>
                       </details>
                     </section>
-                    <section class="brief-card permission-card" aria-label="本次工具授权">
+                    <section
+                      class="brief-card permission-card"
+                      aria-label="本次工具授权"
+                    >
                       <div class="permission-heading">
                         <ShieldCheck :size="17" />
                         <h2>工具使用，由你决定</h2>
@@ -1250,7 +1433,9 @@ function eventLabel(status: string) {
                             }}</small
                           ></span
                         ></label
-                      ><label v-if="capabilities?.model_configured" class="consent"
+                      ><label
+                        v-if="capabilities?.model_configured"
+                        class="consent"
                         ><input
                           v-model="allowModel"
                           type="checkbox"
@@ -1264,18 +1449,27 @@ function eventLabel(status: string) {
                     </section>
                   </template>
                   <label v-else class="consent story-consent"
-                    ><input v-model="allowMemory" type="checkbox" required /><span
+                    ><input
+                      v-model="allowMemory"
+                      type="checkbox"
+                      required
+                    /><span
                       >允许读取所选城市与日期的私人记录<small
                         >仅在本服务内整理文字、日期和可用影像数量；不读取照片内容、不向外部传输。</small
                       ></span
                     ></label
                   >
                   <div class="brief-submit">
-                    <button class="primary-action" type="submit" :disabled="busy">
-                      <LoaderCircle v-if="busy" class="spin" :size="18" /><Sparkles
-                        v-else
+                    <button
+                      class="primary-action"
+                      type="submit"
+                      :disabled="busy"
+                    >
+                      <LoaderCircle
+                        v-if="busy"
+                        class="spin"
                         :size="18"
-                      />{{
+                      /><Sparkles v-else :size="18" />{{
                         busy
                           ? '小曦正在整理…'
                           : mode === 'plan'
@@ -1286,7 +1480,9 @@ function eventLabel(status: string) {
                       }}<ArrowRight v-if="!busy" :size="17" />
                     </button>
                     <p class="brief-footnote">
-                      <ShieldCheck :size="12" />先生成草案，确认后才存入私人档案。
+                      <ShieldCheck
+                        :size="12"
+                      />先生成草案，确认后才存入私人档案。
                     </p>
                   </div>
                 </fieldset>
@@ -1332,24 +1528,72 @@ function eventLabel(status: string) {
                 </button>
               </div>
             </div>
-            <div v-if="busy && !run" class="result-empty working-state" role="status">
+            <div
+              v-if="busy && !run"
+              class="result-empty working-state"
+              role="status"
+            >
               <div class="working-symbol">
                 <Sun :size="40" /><LoaderCircle class="spin" :size="76" />
               </div>
               <p class="eyebrow">A LITTLE THOUGHT GOES A LONG WAY</p>
               <h2>正在把想法，<br />安排成一段旅程。</h2>
-              <p>小曦正在核对输入、执行已授权工具并检查约束，完成后会显示草案与实际调用记录。</p>
-              <span class="working-pill"><span></span>正在等待本次任务结果</span>
+              <p>
+                小曦正在核对输入、执行已授权工具并检查约束，完成后会显示草案与实际调用记录。
+              </p>
+              <span class="working-pill"
+                ><span></span>正在等待本次任务结果</span
+              >
             </div>
+            <section
+              v-else-if="!run && mode === 'story'"
+              class="story-companion"
+            >
+              <div class="story-notebook-art" aria-hidden="true">
+                <BookOpen :size="72" :stroke-width="1" /><span
+                  >THE MOMENTS<br />WE KEEP.</span
+                ><i><MapPin :size="18" />{{ contextCity }}</i>
+              </div>
+              <div>
+                <p class="journey-kicker">YOUR WORDS, YOUR STORY</p>
+                <h2>让散落的记忆，<br />有一条自己的线索。</h2>
+                <p>
+                  小曦只整理你授权的城市与日期中的已有记录。你可以查看原文、修改草稿，最后决定是否保存。
+                </p>
+                <ul>
+                  <li><BookOpen :size="17" />保留日期和原始文字来源</li>
+                  <li>
+                    <ShieldCheck :size="17" />在本服务内整理，不向外部传输
+                  </li>
+                  <li><Check :size="17" />没有记录时，会请你先补充</li>
+                </ul>
+                <button
+                  type="button"
+                  class="journey-text-action"
+                  @click="emit('memories')"
+                >
+                  先翻阅城市记忆<ArrowRight :size="15" />
+                </button>
+              </div>
+            </section>
             <div v-else-if="!run" class="planning-companion">
-              <div class="companion-photo" :class="{ 'without-photo': !contextPhoto }">
-                <img v-if="contextPhoto" :src="contextPhoto.image" :alt="contextPhoto.imageAlt" />
+              <div
+                class="companion-photo"
+                :class="{ 'without-photo': !contextPhoto }"
+              >
+                <img
+                  v-if="contextPhoto"
+                  :src="contextPhoto.image"
+                  :alt="contextPhoto.imageAlt"
+                />
                 <div v-else class="companion-landscape" aria-hidden="true">
                   <Sun :size="48" /><span></span>
                 </div>
                 <div>
                   <span>YOUR NEXT CHAPTER</span>
-                  <h2>{{ contextCity.replace(/市$/, '') }}，<br />值得慢慢走。</h2>
+                  <h2>
+                    {{ contextCity.replace(/市$/, '') }}，<br />值得慢慢走。
+                  </h2>
                 </div>
                 <small v-if="contextPhoto">目的地灵感图</small>
               </div>
@@ -1361,7 +1605,9 @@ function eventLabel(status: string) {
                   把想去的地方、喜欢的节奏告诉小曦。每天的安排与还要核实的细节，都会为你整理清楚。
                 </p>
                 <div class="brief-live-summary">
-                  <span><CalendarDays :size="15" />{{ summaryDate }} · {{ summaryDays }} 天</span
+                  <span
+                    ><CalendarDays :size="15" />{{ summaryDate }} ·
+                    {{ summaryDays }} 天</span
                   ><span
                     ><Compass :size="15" />{{
                       pace === 'relaxed' ? '慢一点，留些空白' : '均衡安排'
@@ -1392,24 +1638,39 @@ function eventLabel(status: string) {
                   </li>
                 </ol>
                 <div
-                  v-if="mode === 'plan' && capabilities && !capabilities.amap_configured"
+                  v-if="
+                    mode === 'plan' &&
+                    capabilities &&
+                    !capabilities.amap_configured
+                  "
                   class="local-planning-note"
                 >
                   <MapPin :size="17" />
                   <div>
                     <strong>带上你已经知道的地点</strong>
-                    <p>当前尚未连接地图查询。你可以补充地点和坐标，再生成一份条件草案。</p>
-                    <button class="text-button" type="button" @click="openCandidates">
+                    <p>
+                      当前尚未连接地图查询。你可以补充地点和坐标，再生成一份条件草案。
+                    </p>
+                    <button
+                      class="text-button"
+                      type="button"
+                      @click="openCandidates"
+                    >
                       补充想去的地点<ArrowRight :size="14" />
                     </button>
                   </div>
                 </div>
-                <p class="companion-bottom"><ShieldCheck :size="13" />私人整理 · 确认后保存</p>
+                <p class="companion-bottom">
+                  <ShieldCheck :size="13" />私人整理 · 确认后保存
+                </p>
               </div>
             </div>
             <template v-else>
               <div v-if="busy" class="updating-banner" role="status">
-                <LoaderCircle class="spin" :size="17" />小曦正在整理，完成后会更新此处。
+                <LoaderCircle
+                  class="spin"
+                  :size="17"
+                />小曦正在整理，完成后会更新此处。
               </div>
               <p v-if="hasPlan && editingBrief" class="editing-note">
                 正在调整旅行条件。生成新草案后再核对保存，也可以返回当前草案。
@@ -1436,7 +1697,8 @@ function eventLabel(status: string) {
               >
                 <CircleCheck
                   v-if="
-                    run.status === 'confirmed' || run.result.verification_status === 'validated'
+                    run.status === 'confirmed' ||
+                    run.result.verification_status === 'validated'
                   "
                   :size="20"
                 /><CircleAlert v-else :size="20" />
@@ -1445,7 +1707,9 @@ function eventLabel(status: string) {
                   <p>{{ run.result.summary }}</p>
                 </div>
                 <span>{{
-                  run.result.intent_source === 'deepseek' ? '模型辅助理解' : '本地规则整理'
+                  run.result.intent_source === 'deepseek'
+                    ? '模型辅助理解'
+                    : '本地规则整理'
                 }}</span>
               </div>
               <button
@@ -1464,7 +1728,9 @@ function eventLabel(status: string) {
                   ><span><MapPin :size="15" />{{ placeCount }} 个地点</span
                   ><span
                     ><ShieldCheck :size="15" />{{
-                      run.status === 'confirmed' ? '已存入私人档案' : '待你核对与确认'
+                      run.status === 'confirmed'
+                        ? '已存入私人档案'
+                        : '待你核对与确认'
                     }}</span
                   >
                 </div>
@@ -1506,7 +1772,9 @@ function eventLabel(status: string) {
                     :class="{ active: resultTab === 'execution' }"
                     @click="resultTab = 'execution'"
                   >
-                    <ListChecks :size="16" />执行记录<span>{{ run.events.length }}</span>
+                    <ListChecks :size="16" />执行记录<span>{{
+                      run.events.length
+                    }}</span>
                   </button>
                 </div>
                 <div class="plan-panels" :class="{ 'is-split': inlineMap }">
@@ -1527,7 +1795,9 @@ function eventLabel(status: string) {
                         @click="activeDay = day.day"
                       >
                         <small>DAY {{ String(day.day).padStart(2, '0') }}</small
-                        ><strong>{{ day.date.slice(5).replace('-', ' / ') }}</strong
+                        ><strong>{{
+                          day.date.slice(5).replace('-', ' / ')
+                        }}</strong
                         ><span>{{ day.stops.length }} 个地点</span>
                       </button>
                     </div>
@@ -1535,7 +1805,9 @@ function eventLabel(status: string) {
                       <div>
                         <p class="eyebrow">A DAY TO REMEMBER</p>
                         <h3>
-                          第 {{ currentDay.day }} 天，慢慢走进{{ contextCity.replace(/市$/, '') }}。
+                          第 {{ currentDay.day }} 天，慢慢走进{{
+                            contextCity.replace(/市$/, '')
+                          }}。
                         </h3>
                       </div>
                       <span>{{ currentDay.start }} — {{ currentDay.end }}</span>
@@ -1545,7 +1817,9 @@ function eventLabel(status: string) {
                         v-for="(stop, index) in currentDay.stops"
                         :key="stop.candidate_id"
                         :data-stop-id="stop.candidate_id"
-                        :class="{ 'is-selected': selectedStopId === stop.candidate_id }"
+                        :class="{
+                          'is-selected': selectedStopId === stop.candidate_id,
+                        }"
                       >
                         <div class="stop-time">
                           <strong>{{ stop.arrival }}</strong
@@ -1576,13 +1850,20 @@ function eventLabel(status: string) {
                           </div>
                           <p>
                             <span class="source-chip"
-                              ><MapPin :size="11" />{{ sourceLabel(stop.source) }}</span
-                            ><span><Clock3 :size="11" />停留 {{ stop.stay_minutes }} 分钟</span>
+                              ><MapPin :size="11" />{{
+                                sourceLabel(stop.source)
+                              }}</span
+                            ><span
+                              ><Clock3 :size="11" />停留
+                              {{ stop.stay_minutes }} 分钟</span
+                            >
                           </p>
                           <small v-if="stop.timing_basis === 'planning_buffer'"
                             >时间含规划预留，交通尚需核实</small
                           ><small v-else>{{
-                            index === 0 ? '按你设置的开始时间安排' : '按已查询交通时间安排'
+                            index === 0
+                              ? '按你设置的开始时间安排'
+                              : '按已查询交通时间安排'
                           }}</small>
                         </article>
                       </li>
@@ -1594,7 +1875,11 @@ function eventLabel(status: string) {
                       <span class="budget-symbol"><Wallet :size="20" /></span>
                       <div>
                         <small>景点费用，先心里有数</small
-                        ><strong>已知 ¥{{ run.result.validation.known_cost_yuan }}</strong>
+                        ><strong
+                          >已知 ¥{{
+                            run.result.validation.known_cost_yuan
+                          }}</strong
+                        >
                       </div>
                       <span
                         >{{
@@ -1618,7 +1903,11 @@ function eventLabel(status: string) {
                             aria-label="调整每天结束时间"
                         /></label>
                       </div>
-                      <button class="secondary-action" type="submit" :disabled="busy">
+                      <button
+                        class="secondary-action"
+                        type="submit"
+                        :disabled="busy"
+                      >
                         <RefreshCw :size="14" />重新安排并检查
                       </button>
                     </form>
@@ -1630,11 +1919,15 @@ function eventLabel(status: string) {
                     class="map-panel"
                     :class="{ 'map-panel--inline': inlineMap }"
                     :role="inlineMap ? 'region' : 'tabpanel'"
-                    :aria-labelledby="inlineMap ? 'inline-map-title' : 'map-tab'"
+                    :aria-labelledby="
+                      inlineMap ? 'inline-map-title' : 'map-tab'
+                    "
                   >
                     <header class="panel-heading">
                       <div>
-                        <p v-if="inlineMap" class="map-eyebrow">THE PLACES ALONG THE WAY</p>
+                        <p v-if="inlineMap" class="map-eyebrow">
+                          THE PLACES ALONG THE WAY
+                        </p>
                         <h3 id="inline-map-title">
                           {{
                             inlineMap
@@ -1669,7 +1962,11 @@ function eventLabel(status: string) {
                       :compact="inlineMap"
                       @select="selectMapStop"
                     />
-                    <div class="map-day-selector" role="group" aria-label="地图查看日期">
+                    <div
+                      class="map-day-selector"
+                      role="group"
+                      aria-label="地图查看日期"
+                    >
                       <button
                         v-for="day in run.result.days"
                         :key="day.day"
@@ -1681,37 +1978,62 @@ function eventLabel(status: string) {
                         第 {{ day.day }} 天 · {{ day.stops.length }} 个地点
                       </button>
                     </div>
-                    <div v-if="selectedStop" class="map-selection" aria-live="polite">
-                      <span class="selection-kicker"><MapPin :size="12" />与行程同步选中</span>
+                    <div
+                      v-if="selectedStop"
+                      class="map-selection"
+                      aria-live="polite"
+                    >
+                      <span class="selection-kicker"
+                        ><MapPin :size="12" />与行程同步选中</span
+                      >
                       <h4>{{ selectedStop.name }}</h4>
                       <p>
-                        {{ selectedStop.arrival }} — {{ selectedStop.departure }} ·
+                        {{ selectedStop.arrival }} —
+                        {{ selectedStop.departure }} ·
                         {{ sourceLabel(selectedStop.source) }}
                       </p>
-                      <button class="text-button" type="button" @click="revealSelectedStop">
+                      <button
+                        class="text-button"
+                        type="button"
+                        @click="revealSelectedStop"
+                      >
                         查看对应行程<ArrowRight :size="13" />
                       </button>
                     </div>
                     <ol v-if="currentDay" class="map-stop-list">
-                      <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
+                      <li
+                        v-for="(stop, index) in currentDay.stops"
+                        :key="stop.candidate_id"
+                      >
                         <button
                           type="button"
-                          :class="{ selected: selectedStopId === stop.candidate_id }"
+                          :class="{
+                            selected: selectedStopId === stop.candidate_id,
+                          }"
                           :aria-pressed="selectedStopId === stop.candidate_id"
                           :aria-label="`选中地图地点${stop.name}`"
-                          @click="selectMapStop({ day: activeDay, candidateId: stop.candidate_id })"
+                          @click="
+                            selectMapStop({
+                              day: activeDay,
+                              candidateId: stop.candidate_id,
+                            })
+                          "
                         >
                           <span>{{ index + 1 }}</span
                           ><span
                             ><strong>{{ stop.name }}</strong
                             ><small
-                              >{{ stop.arrival }} · {{ sourceLabel(stop.source) }}</small
+                              >{{ stop.arrival }} ·
+                              {{ sourceLabel(stop.source) }}</small
                             ></span
                           ><MapPin :size="13" />
                         </button>
                       </li>
                     </ol>
-                    <p v-if="currentDay && !currentDay.stops.length" class="map-empty-day">
+                    <p
+                      v-if="currentDay && !currentDay.stops.length"
+                      class="map-empty-day"
+                    >
                       这一天还没有安排地点，地图保留其他日期的坐标供对照。
                     </p>
                   </section>
@@ -1750,14 +2072,19 @@ function eventLabel(status: string) {
                 </div>
                 <details class="source-records">
                   <summary>
-                    查看 {{ run.result.source_memories?.length ?? 0 }} 条原始旅行记录
+                    查看
+                    {{ run.result.source_memories?.length ?? 0 }} 条原始旅行记录
                   </summary>
-                  <article v-for="memory in run.result.source_memories" :key="memory.id">
+                  <article
+                    v-for="memory in run.result.source_memories"
+                    :key="memory.id"
+                  >
                     <small>{{ memory.date }} · {{ memory.city }}</small
                     ><strong>{{ memory.title }}</strong>
                     <p>{{ memory.body }}</p>
                     <span
-                      >{{ memory.photo_count }} 张可用照片 · {{ memory.vlog_count }} 段Vlog</span
+                      >{{ memory.photo_count }} 张可用照片 ·
+                      {{ memory.vlog_count }} 段Vlog</span
                     >
                   </article>
                 </details></template
@@ -1768,10 +2095,19 @@ function eventLabel(status: string) {
               >
                 <span class="unknown-symbol"><CircleAlert :size="19" /></span>
                 <div>
-                  <h3>{{ run.kind === 'story' ? '保存前，再确认这些' : '出发前，再确认这些' }}</h3>
+                  <h3>
+                    {{
+                      run.kind === 'story'
+                        ? '保存前，再确认这些'
+                        : '出发前，再确认这些'
+                    }}
+                  </h3>
                   <ul>
                     <li
-                      v-for="(item, i) in [...run.result.unknowns, ...run.result.warnings]"
+                      v-for="(item, i) in [
+                        ...run.result.unknowns,
+                        ...run.result.warnings,
+                      ]"
                       :key="i"
                     >
                       {{ item }}
@@ -1779,7 +2115,10 @@ function eventLabel(status: string) {
                   </ul>
                 </div>
               </section>
-              <details v-if="run.result.validation?.checks.length" class="validation-card">
+              <details
+                v-if="run.result.validation?.checks.length"
+                class="validation-card"
+              >
                 <summary>
                   <ShieldCheck :size="16" /><span>查看约束检查</span
                   ><small>{{ run.result.validation.checks.length }} 项</small
@@ -1795,7 +2134,9 @@ function eventLabel(status: string) {
                 v-show="!hasPlan || resultTab === 'execution'"
                 class="execution-card"
                 :role="hasPlan ? 'tabpanel' : 'region'"
-                :aria-labelledby="hasPlan ? 'execution-tab' : 'execution-heading'"
+                :aria-labelledby="
+                  hasPlan ? 'execution-tab' : 'execution-heading'
+                "
               >
                 <header>
                   <div>
@@ -1807,22 +2148,31 @@ function eventLabel(status: string) {
                 <p class="execution-intro">
                   以下是本次任务实际保留的调用与检查记录。未完成、重试和跳过的步骤也会如实显示。
                 </p>
-                <p v-if="!run.events.length" class="no-events">本次任务暂未返回执行记录。</p>
+                <p v-if="!run.events.length" class="no-events">
+                  本次任务暂未返回执行记录。
+                </p>
                 <ol>
                   <li v-for="event in run.events" :key="event.sequence">
                     <span class="event-dot" :class="event.status"
                       ><Check
-                        v-if="event.status === 'success' || event.status === 'succeeded'"
+                        v-if="
+                          event.status === 'success' ||
+                          event.status === 'succeeded'
+                        "
                         :size="12"
                       /><CircleAlert
-                        v-else-if="event.status === 'failed' || event.status === 'error'"
+                        v-else-if="
+                          event.status === 'failed' || event.status === 'error'
+                        "
                         :size="12"
                       /><span v-else>{{ event.sequence }}</span></span
                     >
                     <div>
                       <div class="event-heading">
                         <p>{{ event.message }}</p>
-                        <span :class="event.status">{{ eventLabel(event.status) }}</span>
+                        <span :class="event.status">{{
+                          eventLabel(event.status)
+                        }}</span>
                       </div>
                       <small
                         >{{ event.tool
@@ -1832,7 +2182,11 @@ function eventLabel(status: string) {
                           · {{ event.duration_ms }} ms</template
                         ></small
                       >
-                      <details v-if="event.details && Object.keys(event.details).length">
+                      <details
+                        v-if="
+                          event.details && Object.keys(event.details).length
+                        "
+                      >
                         <summary>调用详情<ChevronDown :size="12" /></summary>
                         <pre>{{ JSON.stringify(event.details, null, 2) }}</pre>
                       </details>
@@ -1840,7 +2194,11 @@ function eventLabel(status: string) {
                   </li>
                 </ol>
               </section>
-              <div v-if="run.status === 'confirmed'" class="saved-card" role="status">
+              <div
+                v-if="run.status === 'confirmed'"
+                class="saved-card"
+                role="status"
+              >
                 <span><CircleCheck :size="26" /></span>
                 <div>
                   <strong>{{
@@ -1876,8 +2234,14 @@ function eventLabel(status: string) {
                 </p>
                 <small
                   >第 {{ confirmation.revision }} 版 · 确认有效至
-                  {{ new Date(confirmation.expires_at).toLocaleTimeString('zh-CN') }}</small
-                ><label v-if="confirmation.requires_unverified_acknowledgement" class="consent"
+                  {{
+                    new Date(confirmation.expires_at).toLocaleTimeString(
+                      'zh-CN',
+                    )
+                  }}</small
+                ><label
+                  v-if="confirmation.requires_unverified_acknowledgement"
+                  class="consent"
                   ><input v-model="acknowledged" type="checkbox" /><span>{{
                     run.kind === 'story'
                       ? '我了解记录和编辑内容未经独立事实核验，按条件草案保存。'
@@ -1896,7 +2260,9 @@ function eventLabel(status: string) {
                     class="primary-action"
                     type="button"
                     :disabled="
-                      busy || (confirmation.requires_unverified_acknowledgement && !acknowledged)
+                      busy ||
+                      (confirmation.requires_unverified_acknowledgement &&
+                        !acknowledged)
                     "
                     @click="save"
                   >
@@ -1919,11 +2285,14 @@ function eventLabel(status: string) {
                     busy ||
                     editingBrief ||
                     (run.kind === 'story' &&
-                      (editTitle !== run.title || editStory !== run.result.story_body))
+                      (editTitle !== run.title ||
+                        editStory !== run.result.story_body))
                   "
                   @click="previewSave"
                 >
-                  <ShieldCheck :size="17" />核对并保存当前草案<ArrowRight :size="17" />
+                  <ShieldCheck :size="17" />核对并保存当前草案<ArrowRight
+                    :size="17"
+                  />
                 </button>
               </div>
               <div v-else-if="run.status !== 'running'" class="save-blocked">
@@ -1951,8 +2320,12 @@ function eventLabel(status: string) {
         <footer class="workspace-footer">
           <span
             >Voyaura · Plan the journey. Shape the story.
-            <a href="/discover/credits.html" target="_blank" rel="noopener">影像署名</a></span
-          ><span><ShieldCheck :size="12" />不会自动购买、公开发布或点亮城市</span>
+            <a href="/discover/credits.html" target="_blank" rel="noopener"
+              >影像署名</a
+            ></span
+          ><span
+            ><ShieldCheck :size="12" />不会自动购买、公开发布或点亮城市</span
+          >
         </footer>
       </div>
     </div>

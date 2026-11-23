@@ -23,7 +23,7 @@ async function post(request: APIRequestContext, path: string, data: object) {
   return response.json()
 }
 function screenshots() {
-  const path = new URL('../../docs/design/experience-entry/flow-screenshots/', import.meta.url)
+  const path = new URL('../../docs/design/round3/flow-screenshots/', import.meta.url)
   mkdirSync(path, { recursive: true })
   return path
 }
@@ -156,7 +156,7 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   }
   writeFileSync(
     new URL(
-      `../../docs/design/experience-entry/result-${testInfo.project.name}-viewport-check.json`,
+      `../../docs/design/round3/result-${testInfo.project.name}-viewport-check.json`,
       import.meta.url,
     ),
     JSON.stringify(checks, null, 2),
@@ -218,6 +218,7 @@ test('故事：实际保存测试记录→授权读取→编辑→确认，空�
 }, testInfo) => {
   await login(page)
   await page.getByRole('button', { name: /^旅行记忆/ }).click()
+  await page.getByRole('button', { name: '整理旅行故事', exact: true }).click()
   await page
     .getByLabel('想留下一段怎样的回忆？', { exact: true })
     .fill('[本地验收输入] 整理测试文字记录')

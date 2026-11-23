@@ -51,9 +51,9 @@ npm audit --omit=dev
 api/.venv/Scripts/python.exe scripts/verify_e2e.py
 ```
 
-此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机12项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/experience-entry，同屏优化原材料位于docs/design/round2-split，第二轮原材料位于docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
+此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机14项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round3，上一轮入口修复证据保留于docs/design/experience-entry，同屏优化原材料位于docs/design/round2-split，第二轮原材料位于docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
 
-本机已安装Chrome，可直接运行。没有Chrome时，在web运行 `npx playwright install chromium`，再设置 `$env:VOYAURA_E2E_CHANNEL='chromium'` 后执行运行器。Linux可用 `npx playwright install --with-deps chromium`。直接 `npm run test:e2e` 会连接指定的现有本地profile并写测试夹具，团队应优先使用隔离运行器。
+本机已安装Chrome，可直接运行。没有Chrome时，在web运行 `npx playwright install chromium`，再设置 `$env:VOYAURA_E2E_CHANNEL='chromium'` 后执行运行器。Linux可用 `npx playwright install --with-deps chromium`。Playwright配置现要求显式的测试令牌与API／Web地址，避免直接运行时误写个人档案；请统一通过隔离运行器执行。
 
 ## 可选服务及生产配置
 
@@ -103,3 +103,11 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 真实产品 `/plan` 顶部的“填入离线演练条件”只替换本页表单，可恢复原输入；“开始演练”才向真实API创建任务。四个地点明确为虚拟输入，不是POI查询结果。演练强制关闭地图／模型／记忆调用，生成后用原草案编辑接口标记演练标题，确认保存仍需用户操作，保存计划不点亮城市。
 
 此入口与当前已运行API兼容，无需重启或修改Key；没有自动向个人档案填充结果。只有用户实际生成／确认才会创建任务／保存。详细步骤与本次验证在docs/design/experience-entry/README.md，当前默认E2E证据目录同步改为experience-entry。
+
+## 第三轮：旅程、城市记忆与创作
+
+当前入口为 `/journey/map`、`/journey/stories` 和 `/studio`。刷新原开发页面即可使用，无需重启API。记忆页先展示城市索引，点击“整理旅行故事”后才进入 `?compose=story`；从城市档案进入时带入城市及最近记忆日期，授权仍默认关闭。
+
+空档案可从“记录一次抵达”手动选择六座已收录城市，预览后再确认。手动索引不验证当前位置；首次／最近记录时间是确认记录时间。确认后可写日期与文字，预览并确认保存，再进入故事整理。照片上传与影像生成仍依赖已配置并联调的媒体／生成服务，不以装饰摄影冒充个人作品。
+
+本轮69项前端／14项真实浏览器通过，生产构建完成；当前四页四屏宽只读检查未发起写请求。可在本地打开 `docs/design/round3/index.html` 对照截图；真实操作步骤见同目录README。截图审阅按钮仅换图。旧轮次E2E产物路径是历史记录，当前默认产物与CI上传目录为round3。

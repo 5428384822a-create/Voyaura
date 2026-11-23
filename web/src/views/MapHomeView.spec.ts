@@ -64,6 +64,26 @@ const overview: MapOverview = {
 }
 
 describe('MapHomeView', () => {
+  it('没有在线底图也能搜索和打开已有城市；记录新抵达仅发出手动入口事件', async () => {
+    const wrapper = mount(MapHomeView, {
+      props: {
+        overview,
+        apiConnected: true,
+        focusPoint: null,
+        checkInBusy: false,
+      },
+      global: { stubs: { ChinaMapCanvas: ChinaMapStub } },
+    })
+    await wrapper.get('[aria-label="查找已记录的城市"]').setValue('陕西')
+    expect(wrapper.findAll('.atlas-city-items > button')).toHaveLength(1)
+    await wrapper.get('.atlas-city-items > button').trigger('click')
+    expect(wrapper.emitted('selectCity')?.[0]).toEqual([
+      overview.visited_cities[1],
+    ])
+    expect(wrapper.emitted('requestCheckIn')).toBeUndefined()
+    await wrapper.get('.journey-hero > button').trigger('click')
+    expect(wrapper.emitted('manualCheckIn')).toEqual([[]])
+  })
   it('opens city POI search from the map', async () => {
     const wrapper = mount(MapHomeView, {
       props: {
@@ -92,21 +112,27 @@ describe('MapHomeView', () => {
     })
 
     expect(wrapper.get('#journey-summary-title').text()).toBe('我的中国旅程')
-    expect(wrapper.findAll('.stats-grid strong').map((item) => item.text())).toEqual([
-      '2', '3', '2', '4',
-    ])
+    expect(
+      wrapper.findAll('.stats-grid strong').map((item) => item.text()),
+    ).toEqual(['2', '3', '2', '4'])
 
-    await wrapper.get('button[data-year="2025"]').trigger('click')
+    await wrapper.get('#atlas-year').setValue('2025')
 
     expect(wrapper.get('#journey-summary-title').text()).toBe('2025 年旅程')
-    expect(wrapper.findAll('.stats-grid strong').map((item) => item.text())).toEqual([
-      '1', '1', '0', '4',
+    expect(
+      wrapper.findAll('.stats-grid strong').map((item) => item.text()),
+    ).toEqual(['1', '1', '0', '4'])
+    const mapOverview = wrapper
+      .findComponent(ChinaMapStub)
+      .props('overview') as MapOverview
+    expect(mapOverview.visited_cities.map((city) => city.adcode)).toEqual([
+      '610100',
     ])
-    const mapOverview = wrapper.findComponent(ChinaMapStub).props('overview') as MapOverview
-    expect(mapOverview.visited_cities.map((city) => city.adcode)).toEqual(['610100'])
     expect(mapOverview.visited_cities[0].memory_count).toBe(1)
 
-    await wrapper.get('button[data-year="all"]').trigger('click')
-    expect(wrapper.findComponent(ChinaMapStub).props('overview')).toEqual(overview)
+    await wrapper.get('#atlas-year').setValue('')
+    expect(wrapper.findComponent(ChinaMapStub).props('overview')).toEqual(
+      overview,
+    )
   })
 })
