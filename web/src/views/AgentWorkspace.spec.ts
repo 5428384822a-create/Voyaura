@@ -70,7 +70,10 @@ function wideScreen() {
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('1280'),
     media: query,
-    addEventListener: (_type: string, callback: (event: MediaQueryListEvent) => void) => {
+    addEventListener: (
+      _type: string,
+      callback: (event: MediaQueryListEvent) => void,
+    ) => {
       if (query.includes('1280')) listener = callback
     },
     removeEventListener: remove,
@@ -98,6 +101,60 @@ beforeEach(() => {
   vi.mocked(api.createAgentRun).mockResolvedValue(fixture())
 })
 describe('小曦工作流交互边界（明确测试替身）', () => {
+  it('直达历史任务只读取并恢复原输入，授权默认关闭，不自动执行或确认', async () => {
+    const run = {
+      ...fixture(),
+      request: {
+        goal: '明确历史测试输入',
+        city_adcode: '350200',
+        daily_end: '18:00',
+        allow_external: true,
+        allow_model: true,
+      },
+    }
+    vi.mocked(api.getAgentRun).mockResolvedValue(run)
+    const wrapper = mount(AgentWorkspace, { props: { initialRunId: run.id } })
+    await flushPromises()
+    expect(api.getAgentRun).toHaveBeenCalledWith(run.id)
+    expect(api.createAgentRun).not.toHaveBeenCalled()
+    expect(api.previewAgentConfirmation).not.toHaveBeenCalled()
+    await button(wrapper, '调整旅行条件').trigger('click')
+    expect(
+      wrapper.get<HTMLTextAreaElement>(
+        'textarea[aria-label="这次想怎样旅行？"]',
+      ).element.value,
+    ).toBe('明确历史测试输入')
+    expect(
+      wrapper
+        .findAll<HTMLInputElement>('.permission-card input')
+        .every((input) => !input.element.checked),
+    ).toBe(true)
+    wrapper.unmount()
+  })
+  it('输入产生脏状态，提交真实任务后清除；未保存的故事编辑重新标记', async () => {
+    const run: AgentRun = {
+      ...fixture(),
+      kind: 'story',
+      title: '测试故事',
+      result: {
+        ...fixture().result,
+        days: [],
+        story_body: '明确来源的测试正文',
+      },
+    }
+    vi.mocked(api.createAgentRun).mockResolvedValue(run)
+    const wrapper = mount(AgentWorkspace, { props: { initialKind: 'story' } })
+    await flushPromises()
+    await wrapper.get('textarea').setValue('明确的测试输入')
+    expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([true])
+    await wrapper.get('.story-consent input').setValue(true)
+    await wrapper.get('.travel-brief').trigger('submit')
+    await flushPromises()
+    expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([false])
+    await wrapper.get('.story-paper textarea').setValue('还没有保存的正文修改')
+    expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([true])
+    wrapper.unmount()
+  })
   it('默认不授权外部工具，条件草案须先预览再主动勾选才能保存', async () => {
     const wrapper = mount(AgentWorkspace)
     await flushPromises()
@@ -127,7 +184,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await button(wrapper, '核对并保存当前草案').trigger('click')
     await flushPromises()
     expect(api.confirmAgentRun).not.toHaveBeenCalled()
-    expect(button(wrapper, '确认保存到私人档案').attributes('disabled')).toBeDefined()
+    expect(
+      button(wrapper, '确认保存到私人档案').attributes('disabled'),
+    ).toBeDefined()
     await wrapper.find('.confirmation-card input[type=checkbox]').setValue(true)
     vi.mocked(api.confirmAgentRun).mockResolvedValue({
       ...fixture(),
@@ -188,7 +247,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
       }),
     )
     await wrapper.find('.story-paper textarea').setValue('我编辑的测试故事。')
-    expect(button(wrapper, '核对并保存当前草案').attributes('disabled')).toBeDefined()
+    expect(
+      button(wrapper, '核对并保存当前草案').attributes('disabled'),
+    ).toBeDefined()
     vi.mocked(api.editAgentDraft).mockResolvedValue({
       ...story,
       revision: 2,
@@ -201,7 +262,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
       title: '测试故事',
       story_body: '我编辑的测试故事。',
     })
-    expect(button(wrapper, '核对并保存当前草案').attributes('disabled')).toBeUndefined()
+    expect(
+      button(wrapper, '核对并保存当前草案').attributes('disabled'),
+    ).toBeUndefined()
   })
   it('空候选和服务未配置时显示信息不足，不提供确认保存', async () => {
     const missing = fixture()
@@ -249,7 +312,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await flushPromises()
     expect(api.editAgentDraft).toHaveBeenCalledWith(
       'test-run',
-      expect.objectContaining({ excluded_candidate_ids: ['previously-excluded', 'c1'] }),
+      expect.objectContaining({
+        excluded_candidate_ids: ['previously-excluded', 'c1'],
+      }),
     )
   })
   it('点选兴趣遵守最多三项，取消后可换选并提交真实表单值', async () => {
@@ -257,8 +322,10 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await flushPromises()
     await wrapper.find('textarea').setValue('测试兴趣与表单条件')
     const interests = wrapper.find('[aria-label="旅行兴趣"]')
-    const option = (name: string) => interests.findAll('button').find((b) => b.text() === name)!
-    for (const name of ['博物馆', '美食', '海边']) await option(name).trigger('click')
+    const option = (name: string) =>
+      interests.findAll('button').find((b) => b.text() === name)!
+    for (const name of ['博物馆', '美食', '海边'])
+      await option(name).trigger('click')
     expect(option('自然风光').attributes('disabled')).toBeDefined()
     await option('博物馆').trigger('click')
     expect(option('自然风光').attributes('disabled')).toBeUndefined()
@@ -279,7 +346,13 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
       ...value.result.days![0]!,
       day: 2,
       date: '2026-12-02',
-      stops: [{ ...value.result.days![0]!.stops[0]!, candidate_id: 'c2', name: '次日夹具地点' }],
+      stops: [
+        {
+          ...value.result.days![0]!.stops[0]!,
+          candidate_id: 'c2',
+          name: '次日夹具地点',
+        },
+      ],
     })
     vi.mocked(api.createAgentRun).mockResolvedValue(value)
     const wrapper = mount(AgentWorkspace)
@@ -295,7 +368,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     expect(wrapper.find('.map-stop-list').text()).toContain('次日夹具地点')
     await wrapper.find('#schedule-tab').trigger('click')
     expect(wrapper.find('.day-timeline').text()).toContain('次日夹具地点')
-    expect(wrapper.findAll('.day-timeline h3').map((h) => h.text())).toEqual(['次日夹具地点'])
+    expect(wrapper.findAll('.day-timeline h3').map((h) => h.text())).toEqual([
+      '次日夹具地点',
+    ])
     await wrapper.find('#execution-tab').trigger('click')
     expect(wrapper.find('.execution-card').isVisible()).toBe(true)
     expect(wrapper.find('.execution-card').text()).toContain('暂未返回执行记录')
@@ -343,19 +418,25 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await flushPromises()
     await button(wrapper, '调整旅行条件').trigger('click')
     await flushPromises()
-    expect(wrapper.find<HTMLTextAreaElement>('[aria-label="这次想怎样旅行？"]').element.value).toBe(
-      '历史任务中的杭州计划',
-    )
-    expect(wrapper.find<HTMLSelectElement>('[aria-label="目的地"]').element.value).toBe('330100')
-    expect(wrapper.find<HTMLInputElement>('[aria-label="出发日期"]').element.value).toBe(
-      '2026-12-03',
-    )
     expect(
-      wrapper.find<HTMLInputElement>('.permission-card input[type=checkbox]').element.checked,
+      wrapper.find<HTMLTextAreaElement>('[aria-label="这次想怎样旅行？"]')
+        .element.value,
+    ).toBe('历史任务中的杭州计划')
+    expect(
+      wrapper.find<HTMLSelectElement>('[aria-label="目的地"]').element.value,
+    ).toBe('330100')
+    expect(
+      wrapper.find<HTMLInputElement>('[aria-label="出发日期"]').element.value,
+    ).toBe('2026-12-03')
+    expect(
+      wrapper.find<HTMLInputElement>('.permission-card input[type=checkbox]')
+        .element.checked,
     ).toBe(false)
     await wrapper.find('form.travel-brief').trigger('submit')
     await flushPromises()
-    expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('整理草案')
+    expect(
+      wrapper.find('.workflow-steps [aria-current=step]').text(),
+    ).toContain('整理草案')
     finish(fixture())
     await flushPromises()
     expect(api.createAgentRun).toHaveBeenCalledWith(
@@ -367,7 +448,12 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
         transport: 'walking',
         allow_external: false,
         allow_model: false,
-        candidates: [expect.objectContaining({ name: '[测试夹具] 杭州地点', longitude: 120.15 })],
+        candidates: [
+          expect.objectContaining({
+            name: '[测试夹具] 杭州地点',
+            longitude: 120.15,
+          }),
+        ],
       }),
     )
   })
@@ -385,13 +471,17 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await wrapper.find('form.travel-brief').trigger('submit')
     await flushPromises()
     expect(wrapper.text()).toContain('正在等待本次任务结果')
-    expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('整理草案')
+    expect(
+      wrapper.find('.workflow-steps [aria-current=step]').text(),
+    ).toContain('整理草案')
     expect(wrapper.find('.execution-card').exists()).toBe(false)
     expect(wrapper.find('.save-preview').exists()).toBe(false)
     finish(fixture())
     await flushPromises()
     expect(wrapper.text()).toContain('条件草案')
-    expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('核对细节')
+    expect(
+      wrapper.find('.workflow-steps [aria-current=step]').text(),
+    ).toContain('核对细节')
   })
   it('宽屏同屏只挂载一个地图，站点与日期联动且缩放后保留选中地点', async () => {
     const screen = wideScreen()
@@ -400,7 +490,13 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
       ...value.result.days![0]!,
       day: 2,
       date: '2026-12-02',
-      stops: [{ ...value.result.days![0]!.stops[0]!, candidate_id: 'c2', name: '次日夹具地点' }],
+      stops: [
+        {
+          ...value.result.days![0]!.stops[0]!,
+          candidate_id: 'c2',
+          name: '次日夹具地点',
+        },
+      ],
     })
     vi.mocked(api.createAgentRun).mockResolvedValue(value)
     const wrapper = mount(AgentWorkspace, { attachTo: document.body })
@@ -413,9 +509,15 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     expect(wrapper.find('#map-panel').isVisible()).toBe(true)
     expect(wrapper.findAllComponents(AgentRouteMap)).toHaveLength(1)
     await wrapper.find('.stop-dot').trigger('click')
-    expect(wrapper.find('.day-timeline li.is-selected h3').text()).toBe('夹具地点')
-    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBe('c1')
-    wrapper.findComponent(AgentRouteMap).vm.$emit('select', { day: 2, candidateId: 'c2' })
+    expect(wrapper.find('.day-timeline li.is-selected h3').text()).toBe(
+      '夹具地点',
+    )
+    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBe(
+      'c1',
+    )
+    wrapper
+      .findComponent(AgentRouteMap)
+      .vm.$emit('select', { day: 2, candidateId: 'c2' })
     await flushPromises()
     expect(wrapper.find('.day-heading').text()).toContain('第 2 天')
     expect(wrapper.find('.map-selection h4').text()).toBe('次日夹具地点')
@@ -431,7 +533,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await wrapper.find('#schedule-tab').trigger('click')
     expect(wrapper.findComponent(AgentRouteMap).element).toBe(instance)
     expect(wrapper.findAllComponents(AgentRouteMap)).toHaveLength(1)
-    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBe('c2')
+    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBe(
+      'c2',
+    )
     wrapper.unmount()
     expect(screen.remove).toHaveBeenCalled()
   })
@@ -440,7 +544,11 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     const updated = fixture()
     updated.revision = 2
     updated.result.days![0]!.stops = [
-      { ...updated.result.days![0]!.stops[0]!, candidate_id: 'c2', name: '保留的夹具地点' },
+      {
+        ...updated.result.days![0]!.stops[0]!,
+        candidate_id: 'c2',
+        name: '保留的夹具地点',
+      },
     ]
     vi.mocked(api.editAgentDraft).mockResolvedValue(updated)
     const wrapper = mount(AgentWorkspace)
@@ -453,7 +561,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await wrapper.find('[aria-label="从草案移除夹具地点"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('.map-selection').exists()).toBe(false)
-    expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBeNull()
+    expect(
+      wrapper.findComponent(AgentRouteMap).props('selectedStopId'),
+    ).toBeNull()
     expect(wrapper.find('.day-timeline').text()).toContain('保留的夹具地点')
   })
   it('演练入口只填写虚拟条件、不自动创建任务，并能恢复原输入', async () => {
@@ -470,16 +580,26 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     expect(wrapper.find('.practice-notice').text()).toContain('虚拟地点')
     expect(wrapper.findAll('.candidate-content fieldset')).toHaveLength(4)
     expect(
-      wrapper.find<HTMLInputElement>('.permission-card input[type=checkbox]').element.checked,
+      wrapper.find<HTMLInputElement>('.permission-card input[type=checkbox]')
+        .element.checked,
     ).toBe(false)
     expect(
-      wrapper.find('.permission-card input[type=checkbox]').attributes('disabled'),
+      wrapper
+        .find('.permission-card input[type=checkbox]')
+        .attributes('disabled'),
     ).toBeDefined()
     await button(wrapper, '恢复我之前的输入').trigger('click')
     await flushPromises()
-    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe('我自己原来填写的计划')
-    expect(wrapper.find<HTMLSelectElement>('[aria-label="目的地"]').element.value).toBe('330100')
-    expect(wrapper.find<HTMLInputElement>('[aria-label="景点预算 / 元"]').element.value).toBe('180')
+    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe(
+      '我自己原来填写的计划',
+    )
+    expect(
+      wrapper.find<HTMLSelectElement>('[aria-label="目的地"]').element.value,
+    ).toBe('330100')
+    expect(
+      wrapper.find<HTMLInputElement>('[aria-label="景点预算 / 元"]').element
+        .value,
+    ).toBe('180')
     expect(wrapper.findAll('.candidate-content fieldset')).toHaveLength(0)
     expect(api.createAgentRun).not.toHaveBeenCalled()
   })
@@ -503,7 +623,9 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     const payload = vi.mocked(api.createAgentRun).mock.calls[0]![0]
     expect(payload.goal.startsWith(PRACTICE_MARKER)).toBe(true)
     expect(payload.candidates).toHaveLength(4)
-    expect(payload.candidates.every((c) => c.name.startsWith(PRACTICE_MARKER))).toBe(true)
+    expect(
+      payload.candidates.every((c) => c.name.startsWith(PRACTICE_MARKER)),
+    ).toBe(true)
     expect(payload.allow_external).toBe(false)
     expect(payload.allow_model).toBe(false)
     expect(payload.allow_memory_access).toBe(false)

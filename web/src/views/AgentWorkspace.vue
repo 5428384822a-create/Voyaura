@@ -60,6 +60,9 @@ const props = defineProps<{
   initialCity?: string
   initialIntent?: DiscoveryIntent | null
   initialDate?: string
+  initialRunId?: string
+  confirmLeave?: () => Promise<boolean>
+  navigateKind?: (kind: 'plan' | 'story', cityAdcode: string) => void
   archiveCities?: Array<{ adcode: string; name_zh: string }>
 }>()
 const emit = defineEmits<{
@@ -67,6 +70,7 @@ const emit = defineEmits<{
   connect: []
   routeTools: []
   memories: []
+  dirtyChange: [dirty: boolean]
 }>()
 const mode = ref<'plan' | 'story'>(props.initialKind ?? 'plan')
 const defaultCities = [
@@ -132,6 +136,7 @@ const mapAvailabilityNote = computed(() =>
 )
 const history = ref<AgentRun[]>([])
 const run = ref<AgentRun | null>(null)
+let alive = true
 const activeDay = ref(1)
 const busy = ref(false)
 const error = ref('')
@@ -203,6 +208,39 @@ function captureBrief() {
     allowModel: allowModel.value,
     candidates: candidates.value.map((c) => ({ ...c })),
   }
+}
+function briefFingerprint() {
+  const {
+    allowExternal: _external,
+    allowModel: _model,
+    ...content
+  } = captureBrief()
+  return JSON.stringify(content)
+}
+const briefBaseline = ref(briefFingerprint())
+const unsavedChanges = computed(() => {
+  const briefVisible =
+    !run.value || editingBrief.value || run.value.status === 'needs_input'
+  const storyEdited =
+    run.value?.kind === 'story' &&
+    (editTitle.value !== run.value.title ||
+      editStory.value !== (run.value.result.story_body ?? ''))
+  const scheduleEdited =
+    run.value?.kind === 'plan' &&
+    revisedEnd.value !== String(run.value.request.daily_end ?? '18:00')
+  return (
+    (briefVisible && briefFingerprint() !== briefBaseline.value) ||
+    storyEdited ||
+    scheduleEdited
+  )
+})
+watch(unsavedChanges, (value) => emit('dirtyChange', value), {
+  immediate: true,
+})
+function chooseMode(kind: 'plan' | 'story') {
+  if (kind === mode.value) return
+  if (props.navigateKind) props.navigateKind(kind, cityCode.value)
+  else mode.value = kind
 }
 async function loadPracticeBrief() {
   if (busy.value) return
@@ -500,6 +538,7 @@ function clearConfirmation() {
   acknowledged.value = false
 }
 function useRun(value: AgentRun) {
+  if (!alive) return
   value = {
     ...value,
     events: value.events ?? [],
@@ -518,6 +557,7 @@ function useRun(value: AgentRun) {
   editTitle.value = value.title
   editStory.value = value.result.story_body ?? ''
   revisedEnd.value = String(value.request.daily_end ?? '18:00')
+  briefBaseline.value = briefFingerprint()
   activeDay.value = value.result.days?.[0]?.day ?? 1
   editingBrief.value = false
   resultTab.value = 'schedule'
@@ -538,18 +578,23 @@ async function loadHistory() {
 }
 onMounted(async () => {
   splitQuery?.addEventListener?.('change', syncSplitScreen)
+  if (props.initialRunId) busy.value = true
   const results = await Promise.allSettled([
     getAgentCapabilities(),
     listAgentRuns(),
   ])
+  if (!alive) return
   if (results[0].status === 'fulfilled') capabilities.value = results[0].value
   else capabilitiesUnavailable.value = true
   if (results[1].status === 'fulfilled') history.value = results[1].value.items
   else reportError(results[1].reason)
+  if (props.initialRunId) await restore(props.initialRunId)
 })
-onBeforeUnmount(() =>
-  splitQuery?.removeEventListener?.('change', syncSplitScreen),
-)
+onBeforeUnmount(() => {
+  alive = false
+  splitQuery?.removeEventListener?.('change', syncSplitScreen)
+  emit('dirtyChange', false)
+})
 watch(
   () => props.initialKind,
   (v) => {
@@ -687,14 +732,22 @@ async function submit(retry = false) {
   }
 }
 async function restore(id: string) {
+  if (
+    unsavedChanges.value &&
+    props.confirmLeave &&
+    !(await props.confirmLeave())
+  )
+    return
   busy.value = true
   error.value = ''
   try {
     const value = await getAgentRun(id)
+    if (!alive) return
     mode.value = value.kind
     await Promise.resolve()
     useRun(value)
     restoreBrief(value)
+    briefBaseline.value = briefFingerprint()
     showHistory.value = false
   } catch (e) {
     reportError(e)
@@ -826,6 +879,12 @@ function eventLabel(status: string) {
                     : '把回忆，写成自己的故事。'
                 }}
               </h1>
+              <span
+                v-if="unsavedChanges"
+                class="workspace-edit-status"
+                role="status"
+                >有未提交的编辑</span
+              >
             </div>
           </div>
           <div class="workspace-header-actions">
@@ -1038,7 +1097,7 @@ function eventLabel(status: string) {
                   :aria-pressed="mode === 'plan'"
                   type="button"
                   :disabled="busy"
-                  @click="mode = 'plan'"
+                  @click="chooseMode('plan')"
                 >
                   <Compass :size="16" />规划旅程</button
                 ><button
@@ -1046,7 +1105,7 @@ function eventLabel(status: string) {
                   :aria-pressed="mode === 'story'"
                   type="button"
                   :disabled="busy"
-                  @click="mode = 'story'"
+                  @click="chooseMode('story')"
                 >
                   <BookOpen :size="16" />整理故事
                 </button>

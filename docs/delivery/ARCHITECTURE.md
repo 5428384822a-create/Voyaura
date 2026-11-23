@@ -67,3 +67,9 @@ flowchart LR
 `/journey/map` 为足迹与城市档案；`/journey/stories` 为城市记忆索引；`/journey/stories?compose=story&city=<adcode>&date=<YYYY-MM-DD>` 为故事编辑入口。URL只承载城市／日期，不携带私人正文或访问令牌。进入编辑不自动授权读取；`/studio` 展示真实作品历史及源照片关联。
 
 手动六城索引是前端提供的用户输入选项，复用原manual-preview／manual-confirm，来源保留manual，不替代在线定位。所有数据写入和删除继续通过原确认流程。`useDialogFocus` 管理本轮到访、文字编辑与城市档案键盘焦点；嵌套编辑时底层档案设为inert，避免双重焦点陷阱。
+
+## 第四轮档案与导航
+
+`/account` 使用现有概览、任务列表与配置接口。访客仅加载本地引导；工作台在连接身份前不挂载，避免未授权预读。最近任务通过run参数读取持久化原记录，恢复输入但不恢复外部／记忆授权或确认凭据。未登录直达路径由本地路由保留，验证后恢复。
+
+App管理导航保护，工作台与文字编辑器报告未提交状态；取消离开不改变页面，主动放弃后才提交路由。beforeunload补充刷新／关窗保护，正文没有新增浏览器持久化副本。嵌套提醒令底层编辑器inert，useDialogFocus仅处理当前活动对话框。

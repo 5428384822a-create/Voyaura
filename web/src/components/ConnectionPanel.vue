@@ -2,9 +2,15 @@
 import { onMounted, ref } from 'vue'
 import { KeyRound, LockKeyhole, X } from 'lucide-vue-next'
 import { ApiClientError, request } from '../api/client'
-import { clearSession, getAccessToken, setAccessToken, setOwnerUsername } from '../api/session'
+import {
+  clearSession,
+  getAccessToken,
+  setAccessToken,
+  setOwnerUsername,
+} from '../api/session'
 
 const emit = defineEmits<{ connected: []; close: []; disconnected: [] }>()
+defineProps<{ returnLabel?: string }>()
 const token = ref('')
 const busy = ref(false)
 const error = ref('')
@@ -23,7 +29,8 @@ async function connect() {
     emit('connected')
   } catch (e) {
     setAccessToken(previous)
-    error.value = e instanceof ApiClientError ? e.message : '连接失败，请稍后重试。'
+    error.value =
+      e instanceof ApiClientError ? e.message : '连接失败，请稍后重试。'
   } finally {
     busy.value = false
   }
@@ -52,7 +59,11 @@ function trapFocus(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="connection-backdrop" @keydown.esc="emit('close')" @keydown="trapFocus">
+  <div
+    class="connection-backdrop"
+    @keydown.esc="emit('close')"
+    @keydown="trapFocus"
+  >
     <section
       role="dialog"
       aria-modal="true"
@@ -71,12 +82,16 @@ function trapFocus(event: KeyboardEvent) {
       <p class="eyebrow">YOUR PRIVATE TRAVEL ARCHIVE</p>
       <h1 id="connection-title">连接你的私人旅程</h1>
       <p>输入本机服务提供的访问令牌，打开专属地图、行程和旅行记忆。</p>
+      <p v-if="returnLabel" class="connection-return">
+        验证后继续：{{ returnLabel }}
+      </p>
       <form @submit.prevent="connect">
         <label for="access-token">访问令牌</label>
         <input
           id="access-token"
           ref="input"
           v-model="token"
+          :disabled="busy"
           type="password"
           autocomplete="off"
           spellcheck="false"
@@ -93,8 +108,15 @@ function trapFocus(event: KeyboardEvent) {
           <KeyRound :size="17" />{{ busy ? '正在验证…' : '连接 Voyaura' }}
         </button>
       </form>
-      <small>令牌仅保存在本标签页会话，断开后需重新输入。请勿与他人分享。</small>
-      <button v-if="hadSession" class="disconnect" type="button" @click="disconnect">
+      <small
+        >令牌仅保存在本标签页会话，断开后需重新输入。请勿与他人分享。</small
+      >
+      <button
+        v-if="hadSession"
+        class="disconnect"
+        type="button"
+        @click="disconnect"
+      >
         断开并清除本页会话
       </button>
     </section>
@@ -188,6 +210,15 @@ small {
 }
 .connection-error {
   color: #a33428;
+}
+.connection-return {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #e6ddc8;
+  border-radius: 7px;
+  background: #faf3e3;
+  color: #8b7047;
+  font-size: 11px;
 }
 .disconnect {
   display: block;

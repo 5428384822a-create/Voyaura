@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { viewPaths } from './router'
 import type { DiscoveryIntent } from './content/discovery'
@@ -84,6 +84,9 @@ import ImageStudioView from './views/ImageStudioView.vue'
 import JourneyPlannerView from './views/JourneyPlannerView.vue'
 import MapHomeView from './views/MapHomeView.vue'
 import MemoryLibraryView from './views/MemoryLibraryView.vue'
+import AccountHomeView from './views/AccountHomeView.vue'
+import UnsavedChangesDialog from './components/UnsavedChangesDialog.vue'
+import type { AgentRun } from './api/agent'
 import { manualCityIndex, matchManualCities } from './content/cityIndex'
 
 const route = useRoute()
@@ -106,6 +109,41 @@ const overview = ref<MapOverview>(emptyOverview)
 const apiConnected = ref(false)
 const connectionOpen = ref(false)
 const pendingView = ref<AppView | null>(null)
+const pendingDestination = ref<string | null>(null)
+const hasSession = ref(Boolean(getAccessToken()))
+const overviewBusy = ref(false)
+const agentDirty = ref(false)
+const memoryDirty = ref(false)
+const discardOpen = ref(false)
+let discardDecision: ((allowed: boolean) => void) | null = null
+const hasUnsavedChanges = computed(() => agentDirty.value || memoryDirty.value)
+function confirmDiscard(): Promise<boolean> {
+  if (!hasUnsavedChanges.value) return Promise.resolve(true)
+  if (discardDecision) return Promise.resolve(false)
+  discardOpen.value = true
+  return new Promise((resolve) => {
+    discardDecision = resolve
+  })
+}
+function decideDiscard(allowed: boolean) {
+  const decision = discardDecision
+  discardDecision = null
+  discardOpen.value = false
+  if (allowed) {
+    agentDirty.value = false
+    memoryDirty.value = false
+  }
+  decision?.(allowed)
+}
+const removeNavigationGuard = router.beforeEach((to, from) =>
+  to.fullPath === from.fullPath ? true : confirmDiscard(),
+)
+function protectUnload(event: BeforeUnloadEvent) {
+  if (hasUnsavedChanges.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
 const agentIntent = ref<DiscoveryIntent | null>(
   window.history.state?.discoveryIntent ?? null,
 )
@@ -223,31 +261,49 @@ const checkInBusy = computed(
 )
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', protectUnload)
   if (!getAccessToken()) {
-    if (activeView.value !== 'discover') {
+    if (!['discover', 'profile'].includes(activeView.value)) {
       pendingView.value = activeView.value
+      pendingDestination.value = route.fullPath
       await router.replace(viewPaths.discover)
       connectionOpen.value = true
     }
     return
   }
+  await loadOverview()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', protectUnload)
+  removeNavigationGuard()
+  discardDecision?.(false)
+  discardDecision = null
+})
+async function loadOverview() {
+  overviewBusy.value = true
   try {
     overview.value = await getMapOverview()
     apiConnected.value = true
   } catch {
     apiConnected.value = false
+  } finally {
+    overviewBusy.value = false
   }
-})
+}
+watch(
+  () => route.fullPath,
+  () => {
+    routeToolsOpen.value = false
+    closeCityMemory()
+    memoryComposerCity.value = null
+    memoryDirty.value = false
+  },
+)
 
 function selectView(view: AppView) {
-  if (view === 'profile') {
-    connectionOpen.value = true
-    return
-  }
-  routeToolsOpen.value = false
-  selectedCity.value = null
-  if (view !== 'discover' && !getAccessToken()) {
+  if (!['discover', 'profile'].includes(view) && !getAccessToken()) {
     pendingView.value = view
+    pendingDestination.value = viewPaths[view]
     connectionOpen.value = true
     return
   }
@@ -261,6 +317,7 @@ function startDiscoveryPlan(intent: DiscoveryIntent) {
   selectedCity.value = null
   if (!getAccessToken()) {
     pendingView.value = 'journeys'
+    pendingDestination.value = null
     connectionOpen.value = true
     return
   }
@@ -273,28 +330,56 @@ function startDiscoveryPlan(intent: DiscoveryIntent) {
 function closeConnection() {
   connectionOpen.value = false
   pendingView.value = null
+  pendingDestination.value = null
 }
 
 async function onConnected() {
   connectionOpen.value = false
-  try {
-    overview.value = await getMapOverview()
-    apiConnected.value = true
-  } catch {
-    apiConnected.value = false
-  }
+  hasSession.value = true
+  await loadOverview()
   const next = pendingView.value
+  const destination = pendingDestination.value
   pendingView.value = null
-  if (next) {
-    if (next === 'journeys' && agentIntent.value)
-      await router.push({
-        path: viewPaths.journeys,
-        state: {
-          discoveryIntent: JSON.parse(JSON.stringify(agentIntent.value)),
-        },
-      })
-    else activeView.value = next
+  pendingDestination.value = null
+  if (destination) {
+    await router.push(destination)
+    return
   }
+  if (next === 'journeys' && agentIntent.value) {
+    await router.push({
+      path: viewPaths.journeys,
+      state: { discoveryIntent: JSON.parse(JSON.stringify(agentIntent.value)) },
+    })
+  } else if (next) activeView.value = next
+}
+function openAccount() {
+  if (hasSession.value) selectView('profile')
+  else connectionOpen.value = true
+}
+function openRecentRun(run: AgentRun) {
+  const city =
+    typeof run.request.city_adcode === 'string'
+      ? run.request.city_adcode
+      : '440100'
+  void router.push({
+    path: run.kind === 'plan' ? viewPaths.journeys : viewPaths.memories,
+    query: {
+      run: run.id,
+      ...(run.kind === 'story' ? { compose: 'story', city } : {}),
+    },
+  })
+}
+function navigateWorkspaceKind(kind: 'plan' | 'story', cityAdcode: string) {
+  void router.push({
+    path: kind === 'plan' ? viewPaths.journeys : viewPaths.memories,
+    query: {
+      city: cityAdcode,
+      ...(kind === 'story' ? { compose: 'story' } : {}),
+    },
+  })
+}
+async function openRouteTools() {
+  if (await confirmDiscard()) routeToolsOpen.value = true
 }
 
 function reloadDisconnected() {
@@ -635,7 +720,9 @@ function openMemoryEditor(memory: CityMemoryItem) {
   memoryError.value = null
 }
 
-function closeMemoryComposer() {
+async function closeMemoryComposer() {
+  if (memoryDirty.value && !(await confirmDiscard())) return
+  memoryDirty.value = false
   memoryComposerCity.value = null
   memoryTarget.value = null
   memoryDraft.value = null
@@ -1266,11 +1353,13 @@ async function confirmMediaUpload() {
       :active-view="activeView"
       :connected="apiConnected"
       @select="selectView"
-      @connect="connectionOpen = true"
+      @connect="openAccount"
       @xiaoxi="openXiaoxi"
     />
     <DiscoverHomeView
-      v-if="activeView === 'discover'"
+      v-if="
+        activeView === 'discover' || (!hasSession && activeView !== 'profile')
+      "
       :connected="apiConnected"
       :cover="previewCover"
       :stats="overview.stats"
@@ -1309,23 +1398,45 @@ async function confirmMediaUpload() {
     />
     <AgentWorkspace
       v-else-if="activeView === 'journeys' || storyWorkspaceOpen"
-      :key="activeView === 'memories' ? `story-${storyCity}` : 'plan'"
+      :key="`${activeView}-${typeof route.query.run === 'string' ? route.query.run : storyCity}`"
+      :inert="discardOpen || undefined"
+      :initial-run-id="
+        typeof route.query.run === 'string' ? route.query.run : undefined
+      "
+      :confirm-leave="confirmDiscard"
+      :navigate-kind="navigateWorkspaceKind"
+      @dirty-change="agentDirty = $event"
       :initial-kind="activeView === 'memories' ? 'story' : 'plan'"
-      :initial-city="activeView === 'memories' ? storyCity : agentCity"
+      :initial-city="storyCity"
       :archive-cities="overview.visited_cities"
       :initial-date="
         typeof route.query.date === 'string' ? route.query.date : undefined
       "
-      :initial-intent="activeView === 'journeys' ? agentIntent : null"
+      :initial-intent="
+        activeView === 'journeys' && !route.query.run && !route.query.city
+          ? agentIntent
+          : null
+      "
       @back="selectView(activeView === 'memories' ? 'memories' : 'discover')"
       @memories="selectView('memories')"
       @connect="connectionOpen = true"
-      @route-tools="routeToolsOpen = true"
+      @route-tools="openRouteTools"
     />
     <ImageStudioView
       v-else-if="activeView === 'studio'"
       @back="selectView('map')"
       @memories="selectView('memories')"
+    />
+    <AccountHomeView
+      v-else-if="activeView === 'profile'"
+      :overview="overview"
+      :connected="apiConnected"
+      :has-session="hasSession"
+      :refreshing="overviewBusy"
+      @connect="connectionOpen = true"
+      @refresh="loadOverview"
+      @select="selectView"
+      @open-run="openRecentRun"
     />
     <EmptyView v-else :view="activeView" @back="activeView = 'map'" />
 
@@ -1381,7 +1492,8 @@ async function confirmMediaUpload() {
             !!memoryDeleteCity ||
             !!mediaDeleteCity ||
             !!mediaUploadCity ||
-            !!imageStyleCity
+            !!imageStyleCity ||
+            discardOpen
           "
           :phase="cityMemoryPhase"
           :detail="cityMemoryDetail"
@@ -1404,6 +1516,18 @@ async function confirmMediaUpload() {
     </Transition>
     <ConnectionPanel
       v-if="connectionOpen"
+      :return-label="
+        pendingView
+          ? {
+              journeys: '行程规划',
+              memories: '旅行记忆与故事',
+              map: '旅行足迹',
+              studio: '影像创作',
+              discover: '旅行发现',
+              profile: '我的档案',
+            }[pendingView]
+          : undefined
+      "
       @close="closeConnection"
       @connected="onConnected"
       @disconnected="reloadDisconnected"
@@ -1465,6 +1589,8 @@ async function confirmMediaUpload() {
         :city="memoryComposerCity"
         :mode="memoryComposerMode"
         :initial-memory="memoryTarget"
+        :inert="discardOpen || undefined"
+        @dirty-change="memoryDirty = $event"
         :phase="memoryComposerPhase"
         :preview="memoryPreview"
         :error="memoryError"
@@ -1486,5 +1612,10 @@ async function confirmMediaUpload() {
         @confirm="confirmMemoryDelete"
       />
     </Transition>
+    <UnsavedChangesDialog
+      v-if="discardOpen"
+      @stay="decideDiscard(false)"
+      @discard="decideDiscard(true)"
+    />
   </div>
 </template>

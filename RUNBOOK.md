@@ -51,7 +51,7 @@ npm audit --omit=dev
 api/.venv/Scripts/python.exe scripts/verify_e2e.py
 ```
 
-此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机14项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round3，上一轮入口修复证据保留于docs/design/experience-entry，同屏优化原材料位于docs/design/round2-split，第二轮原材料位于docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
+此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机18项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round4，第三轮保留于docs/design/round3，入口修复证据保留于docs/design/experience-entry，同屏优化原材料位于docs/design/round2-split，第二轮原材料位于docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
 
 本机已安装Chrome，可直接运行。没有Chrome时，在web运行 `npx playwright install chromium`，再设置 `$env:VOYAURA_E2E_CHANNEL='chromium'` 后执行运行器。Linux可用 `npx playwright install --with-deps chromium`。Playwright配置现要求显式的测试令牌与API／Web地址，避免直接运行时误写个人档案；请统一通过隔离运行器执行。
 
@@ -111,3 +111,11 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 空档案可从“记录一次抵达”手动选择六座已收录城市，预览后再确认。手动索引不验证当前位置；首次／最近记录时间是确认记录时间。确认后可写日期与文字，预览并确认保存，再进入故事整理。照片上传与影像生成仍依赖已配置并联调的媒体／生成服务，不以装饰摄影冒充个人作品。
 
 本轮69项前端／14项真实浏览器通过，生产构建完成；当前四页四屏宽只读检查未发起写请求。可在本地打开 `docs/design/round3/index.html` 对照截图；真实操作步骤见同目录README。截图审阅按钮仅换图。旧轮次E2E产物路径是历史记录，当前默认产物与CI上传目录为round3。
+
+## 第四轮：档案总览与全流程衔接
+
+当前“我的”入口为 `/account`。未连接可先阅读使用引导，选择私人场景后按需连接；已连接后展示实际统计、最近任务与当前配置。头部“我的档案”进入总览，令牌更换／断开移到“连接设置”。
+
+打开最近任务会进入 `/plan?run=<id>` 或 `/journey/stories?run=<id>&compose=story&city=<adcode>`，读取原版本；不重新创建、不自动授权或确认。直接打开私人链接时，验证后恢复完整本地路径。编辑后离开会提醒；取消保留输入，主动放弃才导航。浏览器刷新／关闭的提醒不等于自动存稿，未提交内容只保留于当前页面内存。
+
+第四轮80项前端／18项真实浏览器、类型检查及生产构建通过；当前服务四屏宽只读检查无写请求。`docs/design/round4/index.html` 为已实施结果的截图对照，`README.md` 为操作指引。当前服务截图遮盖私人身份与任务文字，完整功能图来自独立验收库。

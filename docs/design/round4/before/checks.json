@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "view": "account",
+      "name": "desktop",
+      "viewport": 1440,
+      "documentWidth": 1440,
+      "scrollContainers": []
+    },
+    {
+      "view": "account",
+      "name": "mobile",
+      "viewport": 390,
+      "documentWidth": 390,
+      "scrollContainers": []
+    }
+  ],
+  "errors": [],
+  "mutations": []
+}

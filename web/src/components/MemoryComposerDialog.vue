@@ -8,7 +8,7 @@ import {
   LockKeyhole,
   X,
 } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useDialogFocus } from './useDialogFocus'
 import type {
   AppErrorInfo,
@@ -33,6 +33,7 @@ const emit = defineEmits<{
   preview: [input: NewMemoryInput]
   confirm: []
   edit: []
+  dirtyChange: [dirty: boolean]
 }>()
 
 const dialogRoot = ref<HTMLElement | null>(null)
@@ -49,6 +50,25 @@ const title = ref(props.initialMemory?.title ?? '')
 const body = ref(props.initialMemory?.body ?? '')
 const occurredDate = ref(initialDate)
 const shared = ref(props.initialMemory?.visibility === 'shared')
+
+const originalContent = JSON.stringify({
+  title: title.value,
+  body: body.value,
+  occurredDate: occurredDate.value,
+  shared: shared.value,
+})
+const dirty = computed(
+  () =>
+    props.phase !== 'success' &&
+    JSON.stringify({
+      title: title.value,
+      body: body.value,
+      occurredDate: occurredDate.value,
+      shared: shared.value,
+    }) !== originalContent,
+)
+watch(dirty, (value) => emit('dirtyChange', value), { immediate: true })
+onBeforeUnmount(() => emit('dirtyChange', false))
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',

@@ -16,7 +16,10 @@ export function useDialogFocus(
     document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
-  const active = () => root.value?.isConnected && (options.active?.() ?? true)
+  const active = () =>
+    root.value?.isConnected &&
+    !root.value.closest('[inert]') &&
+    (options.active?.() ?? true)
   const elements = () =>
     [
       ...(root.value?.querySelectorAll<HTMLElement>(
