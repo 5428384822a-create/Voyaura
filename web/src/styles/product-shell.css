@@ -1,15 +1,3 @@
-:root {
-  --product-header-height: 72px;
-  --product-bottom-height: 0px;
-  --page-bg: #faf9f6;
-  --brand-orange: #ed683e;
-  --brand-ink-orange: #c64c2a;
-  --brand-button: #ce4b29;
-  --paper: #faf8f3;
-  --coral: #e5633c;
-  --coral-dark: #c64c2a;
-  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
 body {
   background: var(--page-bg);
 }
@@ -20,14 +8,14 @@ button,
 input,
 select,
 textarea {
-  font-family: inherit;
+  font-family: var(--font-family);
 }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid #e8754b66;
+  outline: 3px solid var(--focus);
   outline-offset: 4px;
 }
 .app-shell > .agent-workspace,
@@ -52,8 +40,8 @@ select:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   *,
-  *::before,
-  *::after {
+*::before,
+*::after {
     scroll-behavior: auto !important;
   }
 }

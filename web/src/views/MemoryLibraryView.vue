@@ -4,7 +4,6 @@ import {
   BookOpen,
   CalendarDays,
   Compass,
-  LockKeyhole,
   MapPin,
   Plus,
   Search,
@@ -79,7 +78,7 @@ function date(value: string) {
       <div class="journey-page">
         <header class="journey-hero">
           <div>
-            <p class="journey-kicker">A LITTLE COLLECTION OF YOU</p>
+
             <h1>那些瞬间，<em>值得再读一遍。</em></h1>
             <p>按城市翻阅手记与影像，把散落的回忆慢慢连成故事。</p>
           </div>
@@ -98,26 +97,10 @@ function date(value: string) {
             <BookOpen :size="17" />城市记忆
           </button>
         </nav>
-        <section class="memory-library-intro">
-          <div class="memory-intro-symbol">
-            <BookOpen :size="34" /><span>KEEP<br />THE MOMENT.</span>
-          </div>
-          <div>
-            <p class="journey-kicker">YOUR PRIVATE COLLECTION</p>
-            <h2>每座城，都有属于你的一页。</h2>
-            <p>
-              <strong>{{ overview.stats.lit_cities }}</strong> 座城市 ·
-              <strong>{{ overview.stats.memories }}</strong> 段记忆 ·
-              <strong>{{ overview.stats.photos }}</strong> 张照片
-            </p>
-          </div>
-          <span class="memory-private-label"
-            ><LockKeyhole :size="14" />私人档案</span
-          >
-        </section>
+        <p class="memory-library-stats">{{ overview.stats.lit_cities }} 座城市 · {{ overview.stats.memories }} 段记忆 · {{ overview.stats.photos }} 张照片</p>
         <div class="memory-library-toolbar">
           <div>
-            <p class="journey-kicker">BROWSE BY CITY</p>
+
             <h2>
               城市索引 <span>{{ visibleCities.length }}</span>
             </h2>
@@ -153,22 +136,18 @@ function date(value: string) {
           aria-label="城市记忆索引"
         >
           <button
-            v-for="(city, index) in visibleCities"
+            v-for="city in visibleCities"
             :key="city.adcode"
             class="memory-city-card"
             type="button"
             :aria-label="`打开${city.name_zh}的城市记忆`"
             @click="emit('selectCity', city)"
           >
-            <span class="memory-card-topline"
-              ><span
-                >CITY ARCHIVE / {{ String(index + 1).padStart(2, '0') }}</span
-              ><MapPin :size="18" /></span
-            ><span class="memory-city-initial" aria-hidden="true">{{
+            <span class="memory-card-location"><MapPin :size="18" />{{ city.province_zh }}</span>
+            <span class="memory-city-initial" aria-hidden="true">{{
               city.name_zh.replace(/市$/, '').slice(0, 1)
             }}</span
             ><span class="memory-card-city"
-              ><span>{{ city.province_zh }}</span
               ><strong>{{ city.name_zh }}</strong
               ><small v-if="city.name_en !== city.name_zh">{{
                 city.name_en
@@ -186,7 +165,7 @@ function date(value: string) {
         </section>
         <section v-else class="memory-library-empty">
           <span class="memory-empty-book"><BookOpen :size="45" /></span>
-          <p class="journey-kicker">A NEW PAGE AWAITS</p>
+
           <h2>
             {{
               filtered
@@ -217,23 +196,23 @@ function date(value: string) {
             <Plus :size="16" />记录一座去过的城
           </button>
         </section>
-        <section class="memory-pathway" aria-label="从记忆到创作">
+        <details class="memory-help ui-disclosure"><summary>如何记录与创作</summary><section class="memory-pathway" aria-label="从记忆到创作">
           <article>
-            <span>01</span>
+
             <div>
               <h3>留下原始记忆</h3>
               <p>在城市档案中写下日期与文字，添加自己的影像。</p>
             </div>
           </article>
           <article>
-            <span>02</span>
+
             <div>
               <h3>和小曦整理故事</h3>
               <p>授权读取选定记录，核对、编辑后再确认保存。</p>
             </div>
           </article>
           <article>
-            <span>03</span>
+
             <div>
               <h3>给照片一种新表达</h3>
               <p>从原照片进入风格创作，作品与来源一起保留。</p>
@@ -246,7 +225,7 @@ function date(value: string) {
               </button>
             </div>
           </article>
-        </section>
+        </section></details>
       </div>
     </div>
   </main>

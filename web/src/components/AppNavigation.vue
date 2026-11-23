@@ -54,9 +54,9 @@ function selected(id: AppView) {
   padding: 0 16px;
   border: 0;
   background: transparent;
-  color: #66716d;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--font-body);
   font-weight: 500;
   transition: color 0.18s;
 }
@@ -105,8 +105,8 @@ function selected(id: AppView) {
     flex-direction: column;
     gap: 4px;
     padding: 5px 0;
-    border-radius: 11px;
-    font-size: 11px;
+    border-radius: var(--radius-surface);
+    font-size: var(--font-label);
     font-weight: 500;
   }
   .product-nav--mobile .product-nav__item.selected {

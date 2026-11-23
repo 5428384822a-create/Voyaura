@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useDialogFocus } from './useDialogFocus'
+import UiButton from './UiButton.vue'
 import type {
   AppErrorInfo,
   CityMemoryDetail,
@@ -67,6 +68,13 @@ watch(
   },
 )
 
+function switchArchiveTab(event: KeyboardEvent) {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return
+  event.preventDefault()
+  archiveMode.value = event.key==='Home' ? 'journal' : event.key==='End' ? 'gallery' : archiveMode.value==='journal' ? 'gallery' : 'journal'
+  const buttons = panel.value?.querySelectorAll<HTMLElement>('.archive-mode-switch [role=tab]')
+  buttons?.[archiveMode.value==='journal'?0:1]?.focus()
+}
 const galleryGroups = computed(() => {
   const groups = new Map<
     string,
@@ -120,7 +128,7 @@ function mediaTaskLabel(task: MediaTaskItem): string {
   >
     <header>
       <div>
-        <small>MY CITY ARCHIVE · {{ city.adcode }}</small>
+
         <h2 id="city-memory-title">我与{{ city.name_zh }}</h2>
         <p>{{ city.province_zh }} · {{ city.name_en }}</p>
         <span class="city-source-label">{{
@@ -207,10 +215,12 @@ function mediaTaskLabel(task: MediaTaskItem): string {
           class="archive-mode-switch"
           role="tablist"
           aria-label="城市档案视图"
+          @keydown="switchArchiveTab"
         >
           <button
             type="button"
             role="tab"
+            :tabindex="archiveMode === 'journal' ? 0 : -1"
             :aria-selected="archiveMode === 'journal'"
             :class="{ active: archiveMode === 'journal' }"
             @click="archiveMode = 'journal'"
@@ -220,6 +230,7 @@ function mediaTaskLabel(task: MediaTaskItem): string {
           <button
             type="button"
             role="tab"
+            :tabindex="archiveMode === 'gallery' ? 0 : -1"
             :aria-selected="archiveMode === 'gallery'"
             :class="{ active: archiveMode === 'gallery' }"
             @click="archiveMode = 'gallery'"
@@ -307,31 +318,9 @@ function mediaTaskLabel(task: MediaTaskItem): string {
                   }}</span
                 >
                 <span class="memory-item-actions">
-                  <button
-                    type="button"
-                    title="添加照片或 Vlog"
-                    aria-label="添加照片或 Vlog"
-                    @click="$emit('uploadMedia', memory)"
-                  >
-                    <ImagePlus :size="15" />
-                  </button>
-                  <button
-                    type="button"
-                    title="编辑记忆"
-                    aria-label="编辑记忆"
-                    @click="$emit('editMemory', memory)"
-                  >
-                    <Pencil :size="14" />
-                  </button>
-                  <button
-                    class="danger"
-                    type="button"
-                    title="删除记忆"
-                    aria-label="删除记忆"
-                    @click="$emit('deleteMemory', memory)"
-                  >
-                    <Trash2 :size="14" />
-                  </button>
+                  <UiButton variant="secondary" aria-label="添加照片或 Vlog" @click="$emit('uploadMedia', memory)"><ImagePlus :size="17" />添加照片</UiButton>
+                  <UiButton variant="tertiary" aria-label="编辑记忆" @click="$emit('editMemory',memory)"><Pencil :size="17" />编辑</UiButton>
+                  <details class="memory-actions-more"><summary aria-label="更多记忆操作">更多</summary><UiButton variant="destructive" aria-label="删除记忆" @click="$emit('deleteMemory',memory)"><Trash2 :size="17" />删除记忆</UiButton></details>
                 </span>
               </div>
               <h3>{{ memory.title }}</h3>

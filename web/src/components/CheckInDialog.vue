@@ -58,7 +58,7 @@ const sourceLabels = {
     >
       <header>
         <div>
-          <p class="eyebrow">CITY CHECK-IN</p>
+
           <h2 id="check-in-title">
             {{
               phase === 'preview'

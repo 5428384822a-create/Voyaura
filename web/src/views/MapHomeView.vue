@@ -81,7 +81,7 @@ watch(
       <div class="journey-page">
         <header class="journey-hero">
           <div>
-            <p class="journey-kicker">THE PLACES WE KEEP</p>
+
             <h1>走过的地方，<em>都有故事。</em></h1>
             <p>把一次次抵达，收进自己的旅行图鉴。</p>
           </div>
@@ -104,9 +104,7 @@ watch(
         <section class="atlas-summary" aria-label="真实旅行统计">
           <div class="atlas-summary-label">
             <span class="atlas-sun"><Compass :size="25" /></span>
-            <div>
-              <span>YOUR TRAVEL ATLAS</span
-              ><strong>{{
+            <div><strong>{{
                 selectedYear ? `${selectedYear} · 年度足迹` : '每一步，都算数。'
               }}</strong>
             </div>
@@ -132,7 +130,7 @@ watch(
         </section>
         <div class="atlas-toolbar">
           <div>
-            <p class="journey-kicker">YOUR FOOTPRINTS</p>
+
             <h2 id="journey-summary-title">
               {{ selectedYear ? `${selectedYear} 年旅程` : '我的中国旅程' }}
             </h2>
@@ -186,7 +184,7 @@ watch(
           <aside class="atlas-city-list" aria-label="城市档案">
             <header>
               <div>
-                <p class="journey-kicker">CITY ARCHIVES</p>
+
                 <h2>收藏过的抵达</h2>
               </div>
               <span>{{ visibleOverview.visited_cities.length }}</span>
@@ -255,7 +253,7 @@ watch(
         <section class="journey-next">
           <span class="journey-next-icon"><Camera :size="25" /></span>
           <div>
-            <p class="journey-kicker">MORE THAN A PIN ON THE MAP</p>
+
             <h2>抵达之后，把感受也留下。</h2>
             <p>写一段手记，添加自己的照片，再和小曦整理成旅行故事。</p>
           </div>

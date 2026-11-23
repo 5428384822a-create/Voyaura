@@ -71,6 +71,12 @@ describe('档案总览（明确组件测试输入）', () => {
     await wrapper.get('.account-task-list button').trigger('click')
     expect(wrapper.emitted('openRun')?.[0]).toEqual([task])
     expect(listAgentRuns).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('.account-guide').attributes('open')).toBeUndefined()
+    expect(wrapper.get('.account-capabilities').attributes('open')).toBeUndefined()
+    const html = wrapper.html()
+    expect(html.indexOf('account-recent')).toBeLessThan(html.indexOf('account-guide'))
+    await wrapper.get('.account-capabilities summary').trigger('click')
+    expect(listAgentRuns).toHaveBeenCalledTimes(1)
   })
   it('服务状态读取失败不阻塞历史，也不假称已连接', async () => {
     getAgentCapabilities.mockRejectedValue(

@@ -16,7 +16,7 @@ useDialogFocus(dialog, () => emit('stay'), { initial: '[data-stay]' })
       aria-labelledby="unsaved-title"
     >
       <span class="unsaved-symbol"><FilePenLine :size="28" /></span>
-      <p class="journey-kicker">KEEP YOUR WORDS CLOSE</p>
+
       <h2 id="unsaved-title">还有未保存的编辑。</h2>
       <p>
         当前页面的输入或修改尚未提交。现在离开，会放弃这些编辑；已经保存的档案仍会保留。
@@ -58,7 +58,7 @@ useDialogFocus(dialog, () => emit('stay'), { initial: '[data-stay]' })
   border-radius: 15px;
   background: #fffdf6;
   box-shadow: 0 25px 80px #172b2530;
-  color: #566a46;
+  color: var(--text-secondary);
 }
 .unsaved-symbol {
   display: grid;
@@ -66,25 +66,21 @@ useDialogFocus(dialog, () => emit('stay'), { initial: '[data-stay]' })
   width: 57px;
   height: 57px;
   border: 1px solid #e8d9bb;
-  border-radius: 13px;
-  color: #b08a52;
+  border-radius: var(--radius-surface);
+  color: var(--text-secondary);
   background: #fbf2df;
   margin-bottom: 23px;
 }
-.unsaved-dialog .journey-kicker {
-  font-size: 8px;
-  color: #927e58;
-}
 .unsaved-dialog h2 {
-  font-size: 24px;
+  font-size: var(--font-section);
   font-weight: 500;
   line-height: 1.6;
   margin: 10px 0 14px;
 }
-.unsaved-dialog > p:not(.journey-kicker) {
-  font-size: 13px;
+.unsaved-dialog > p {
+  font-size: var(--font-secondary);
   line-height: 2;
-  color: #74815f;
+  color: var(--text-secondary);
   margin: 0 0 25px;
 }
 .unsaved-dialog > div {
@@ -93,10 +89,10 @@ useDialogFocus(dialog, () => emit('stay'), { initial: '[data-stay]' })
   gap: 10px;
 }
 .unsaved-dialog button {
-  font-size: 12px;
+  font-size: var(--font-secondary);
 }
 .unsaved-dialog .journey-secondary {
-  color: #916843;
+  color: var(--text-secondary);
   border-color: #e1d3bb;
 }
 @media (max-width: 580px) {
@@ -104,10 +100,10 @@ useDialogFocus(dialog, () => emit('stay'), { initial: '[data-stay]' })
     padding: 26px;
   }
   .unsaved-dialog h2 {
-    font-size: 22px;
+    font-size: var(--font-section);
   }
-  .unsaved-dialog > p:not(.journey-kicker) {
-    font-size: 12px;
+  .unsaved-dialog > p {
+    font-size: var(--font-secondary);
   }
   .unsaved-dialog > div {
     flex-direction: column;

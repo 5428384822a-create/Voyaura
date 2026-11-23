@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   ArrowRight,
   BookOpen,
-  Check,
   CircleAlert,
   Compass,
   History,
@@ -13,7 +12,6 @@ import {
   Palette,
   RefreshCw,
   Settings2,
-  ShieldCheck,
   Sparkles,
   UserRound,
 } from 'lucide-vue-next'
@@ -24,6 +22,8 @@ import {
   type AgentRun,
 } from '../api/agent'
 import { getImageStyles } from '../api/client'
+import UiButton from '../components/UiButton.vue'
+import UiStatus from '../components/UiStatus.vue'
 import type { AppView, ImageStyleCatalog, MapOverview } from '../types'
 
 const props = defineProps<{
@@ -191,244 +191,28 @@ function date(value: string) {
 </script>
 
 <template>
-  <main class="account-home" aria-label="我的旅行档案">
-    <div class="account-scroll">
-      <div class="account-page">
-        <header class="account-hero">
-          <div>
-            <p class="journey-kicker">YOUR JOURNEY, ALL TOGETHER</p>
-            <h1>把旅行，<em>慢慢收成自己的档案。</em></h1>
-            <p>从一个想法，到一次抵达，再到值得重读的故事。</p>
-          </div>
-          <button
-            class="journey-secondary"
-            type="button"
-            @click="emit('connect')"
-          >
-            <Settings2 :size="16" />{{
-              hasSession ? '连接设置' : '连接我的档案'
-            }}
-          </button>
-        </header>
-        <section
-          v-if="!connected"
-          class="account-connect-state"
-          :class="{ interrupted: hasSession }"
-          aria-label="档案连接状态"
-        >
-          <span><KeyRound :size="27" /></span>
-          <div>
-            <h2>
-              {{
-                hasSession
-                  ? '暂时无法读取你的档案'
-                  : '先熟悉旅程，再连接私人档案。'
-              }}
-            </h2>
-            <p>
-              {{
-                hasSession
-                  ? '当前数据尚未读取成功。可以重新读取，或检查本页的连接令牌。'
-                  : '公开发现页可以直接浏览。连接后，才能查看自己的行程、城市和旅行记忆。'
-              }}
-            </p>
-          </div>
-          <button
-            v-if="hasSession"
-            class="journey-primary"
-            type="button"
-            :disabled="refreshing"
-            @click="emit('refresh')"
-          >
-            <RefreshCw :size="15" />重新读取档案</button
-          ><button
-            v-else
-            class="journey-primary"
-            type="button"
-            @click="emit('connect')"
-          >
-            连接私人档案<ArrowRight :size="16" />
-          </button>
-        </section>
-        <section v-else class="account-identity" aria-label="已读取的私人档案">
-          <span class="account-avatar"><UserRound :size="28" /></span>
-          <div>
-            <span class="account-identity-kicker">YOUR PRIVATE ARCHIVE</span>
-            <h2>{{ overview.username }}</h2>
-            <p><ShieldCheck :size="13" />本页已连接 · 私人记录由你确认保存</p>
-          </div>
-          <dl>
-            <div>
-              <dt>城市</dt>
-              <dd>{{ overview.stats.lit_cities }}</dd>
-            </div>
-            <div>
-              <dt>记忆</dt>
-              <dd>{{ overview.stats.memories }}</dd>
-            </div>
-            <div>
-              <dt>照片</dt>
-              <dd>{{ overview.stats.photos }}</dd>
-            </div>
-          </dl>
-        </section>
-        <section class="account-guide" aria-labelledby="account-guide-title">
-          <div class="account-section-title">
-            <div>
-              <p class="journey-kicker">ONE STEP AT A TIME</p>
-              <h2 id="account-guide-title">这一次，你想从哪里开始？</h2>
-            </div>
-            <span>选择一件事，跟着完成。</span>
-          </div>
-          <div class="account-guide-grid">
-            <article v-for="(guide, index) in guides" :key="guide.view">
-              <div class="account-guide-top">
-                <span><component :is="guide.icon" :size="24" /></span
-                ><small>0{{ index + 1 }}</small>
-              </div>
-              <h3>{{ guide.title }}</h3>
-              <p>{{ guide.text }}</p>
-              <button
-                type="button"
-                class="journey-text-action"
-                @click="emit('select', guide.view)"
-              >
-                {{ guide.label }}<ArrowRight :size="15" />
-              </button>
-            </article>
-          </div>
-        </section>
-        <section v-if="connected" class="account-lower">
-          <article class="account-recent" aria-labelledby="recent-title">
-            <div class="account-section-title">
-              <div>
-                <p class="journey-kicker">PICK UP YOUR LAST CHAPTER</p>
-                <h2 id="recent-title">接着上次的旅程</h2>
-              </div>
-              <button
-                class="account-refresh"
-                type="button"
-                aria-label="刷新档案任务与能力"
-                :disabled="loading"
-                @click="loadResources"
-              >
-                <RefreshCw :size="16" :class="{ spin: loading }" />
-              </button>
-            </div>
-            <p v-if="loading" class="account-list-state" role="status">
-              <LoaderCircle class="spin" :size="19" />正在读取最近任务
-            </p>
-            <div
-              v-else-if="historyError"
-              class="account-list-state error"
-              role="alert"
-            >
-              <CircleAlert :size="20" />
-              <p>{{ historyError }}</p>
-              <button
-                type="button"
-                class="journey-text-action"
-                @click="loadResources"
-              >
-                重新读取任务
-              </button>
-            </div>
-            <div v-else-if="!runs.length" class="account-no-tasks">
-              <History :size="30" />
-              <h3>第一段旅程，等你开始。</h3>
-              <p>规划与故事任务会留在这里，随时可以接着查看。</p>
-              <button
-                type="button"
-                class="journey-text-action"
-                @click="emit('select', 'journeys')"
-              >
-                去规划一段旅行<ArrowRight :size="15" />
-              </button>
-            </div>
-            <div v-else class="account-task-list">
-              <button
-                v-for="run in runs.slice(0, 4)"
-                :key="run.id"
-                type="button"
-                :aria-label="`打开${run.kind === 'plan' ? '行程' : '故事'}：${run.title}`"
-                @click="emit('openRun', run)"
-              >
-                <span class="account-task-icon"
-                  ><Compass v-if="run.kind === 'plan'" :size="19" /><BookOpen
-                    v-else
-                    :size="19" /></span
-                ><span class="account-task-copy"
-                  ><strong>{{ run.title }}</strong
-                  ><small
-                    >{{ run.kind === 'plan' ? '行程' : '故事' }} · 第{{
-                      run.revision
-                    }}版 · {{ date(run.updated_at) }}</small
-                  ></span
-                ><span class="account-task-status" :class="run.status">{{
-                  statusLabels[run.status]
-                }}</span
-                ><ArrowRight :size="15" />
-              </button>
-            </div>
-            <p class="account-history-note">
-              打开任务只读取原记录，不会重新生成或自动确认保存。
-            </p>
-          </article>
-          <aside
-            class="account-capabilities"
-            aria-labelledby="capability-title"
-          >
-            <div class="account-section-title">
-              <div>
-                <p class="journey-kicker">WHAT YOU CAN DO TODAY</p>
-                <h2 id="capability-title">当前可用能力</h2>
-              </div>
-              <ShieldCheck :size="19" />
-            </div>
-            <ul>
-              <li v-for="service in services" :key="service.name">
-                <component :is="service.icon" :size="18" />
-                <div>
-                  <strong>{{ service.name }}</strong>
-                  <p>{{ service.text }}</p>
-                </div>
-                <span :class="{ ready: service.ready }"
-                  ><Check v-if="service.ready" :size="12" />{{
-                    service.state
-                  }}</span
-                >
-              </li>
-            </ul>
-            <p class="account-service-note">
-              配置状态来自当前服务。在线查询或生成是否成功，以实际任务结果为准。
-            </p>
-            <button
-              type="button"
-              class="journey-text-action"
-              @click="emit('select', 'studio')"
-            >
-              看看影像创作空间<ArrowRight :size="15" />
-            </button>
-          </aside>
-        </section>
-        <footer class="account-footer">
-          <ShieldCheck :size="15" />
-          <p>
-            先预览，再确认。私人读取、可能收费的调用和保存操作，由你分别决定。
-          </p>
-        </footer>
-      </div>
-    </div>
-  </main>
+  <main class="account-home" aria-label="我的旅行档案"><div class="account-scroll"><div class="account-page">
+    <header class="account-hero"><div><h1>我的档案</h1><p>继续上次的旅程，或者记录新的抵达。</p></div><UiButton v-if="hasSession" variant="tertiary" @click="emit('connect')"><Settings2 :size="18" />连接设置</UiButton></header>
+    <section v-if="!connected" class="account-connect-state" :class="{ interrupted: hasSession }" aria-label="档案连接状态"><KeyRound :size="30" /><div><h2>{{ hasSession ? '暂时无法读取档案' : '连接你的旅行档案' }}</h2><p>{{ hasSession ? '重新读取，或在连接设置中检查访问令牌。' : '连接后查看自己的行程、城市与旅行记忆。发现页可以直接浏览。' }}</p></div><UiButton v-if="hasSession" variant="primary" :loading="refreshing" @click="emit('refresh')">重新读取档案</UiButton><UiButton v-else variant="primary" @click="emit('connect')">连接私人档案<ArrowRight :size="18" /></UiButton></section>
+    <section v-else class="account-identity" aria-label="已读取的私人档案"><span class="account-avatar"><UserRound :size="26" /></span><div><h2>{{ overview.username }}</h2><UiStatus tone="success">已连接</UiStatus></div><dl><div><dt>城市</dt><dd>{{ overview.stats.lit_cities }}</dd></div><div><dt>记忆</dt><dd>{{ overview.stats.memories }}</dd></div><div><dt>照片</dt><dd>{{ overview.stats.photos }}</dd></div></dl></section>
+    <section v-if="connected" class="account-recent" aria-labelledby="recent-title"><div class="account-section-title"><h2 id="recent-title">最近任务</h2><UiButton class="account-refresh" variant="tertiary" :disabled="loading" aria-label="刷新档案任务与能力" @click="loadResources"><RefreshCw :size="18" :class="{ spin: loading }" />刷新</UiButton></div>
+      <p v-if="loading" class="account-list-state" role="status"><LoaderCircle class="spin" :size="20" />正在读取最近任务</p>
+      <div v-else-if="historyError" class="account-list-state error" role="alert"><CircleAlert :size="22" /><p>{{ historyError }}</p><UiButton variant="secondary" @click="loadResources">重新读取任务</UiButton></div>
+      <div v-else-if="!runs.length" class="account-no-tasks"><History :size="32" /><div><h3>还没有任务</h3><p>从一个旅行想法开始，之后可以在这里接着查看。</p></div><UiButton variant="primary" @click="emit('select','journeys')">规划一段旅行<ArrowRight :size="18" /></UiButton></div>
+      <div v-else class="account-task-list"><button v-for="run in runs.slice(0,4)" :key="run.id" type="button" :aria-label="`打开${run.kind === 'plan' ? '行程' : '故事'}：${run.title}`" @click="emit('openRun',run)"><span class="account-task-icon"><Compass v-if="run.kind==='plan'" :size="22" /><BookOpen v-else :size="22" /></span><span class="account-task-copy"><strong>{{ run.title }}</strong><small>{{ run.kind==='plan'?'行程':'故事' }} · 第{{ run.revision }}版 · {{ date(run.updated_at) }}</small></span><UiStatus class="account-task-status" :class="run.status" :tone="run.status==='confirmed'?'success':run.status==='failed'?'error':run.status==='needs_input'?'warning':'neutral'">{{ statusLabels[run.status] }}</UiStatus><ArrowRight :size="18" /></button></div>
+    </section>
+    <nav class="account-shortcuts" aria-label="档案快捷操作"><UiButton v-for="guide in guides" :key="guide.view" variant="secondary" @click="emit('select',guide.view)"><component :is="guide.icon" :size="19" />{{ guide.label }}<ArrowRight :size="17" /></UiButton></nav>
+    <details class="account-guide ui-disclosure" :open="!connected || (!loading && !runs.length && !historyError)"><summary>使用指南</summary><div class="account-guide-grid"><article v-for="guide in guides" :key="guide.view"><h3>{{ guide.title }}</h3><p>{{ guide.text }}</p></article></div></details>
+    <details v-if="connected" class="account-capabilities ui-disclosure"><summary>服务状态</summary><ul><li v-for="service in services" :key="service.name"><component :is="service.icon" :size="20" /><div><strong>{{ service.name }}</strong><p>{{ service.text }}</p></div><UiStatus :tone="service.ready?'success':'neutral'">{{ service.state }}</UiStatus></li></ul><p class="account-service-note">这里显示配置状态，在线查询或生成以实际任务结果为准。</p><UiButton variant="tertiary" @click="emit('select','studio')">打开影像创作<ArrowRight :size="17" /></UiButton></details>
+  </div></div></main>
 </template>
-
 <style scoped>
 .account-home {
   position: absolute;
   inset: var(--product-header-height) 0 var(--product-bottom-height);
   overflow: hidden;
-  background: var(--page-bg);
-  color: #40513a;
+  background: var(--canvas);
+  color: var(--text-body);
 }
 .account-scroll {
   height: 100%;
@@ -436,667 +220,362 @@ function date(value: string) {
   scrollbar-gutter: stable;
 }
 .account-page {
-  width: min(1280px, calc(100% - 80px));
+  width: min(1120px,calc(100% - 96px));
   margin: auto;
-  padding: 38px 0 30px;
+  padding: var(--space-7) 0;
 }
-.account-hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 25px;
-  margin-bottom: 28px;
-}
-.account-hero h1 {
-  font-size: clamp(27px, 2.5vw, 34px);
-  font-weight: 550;
-  letter-spacing: -1px;
-  line-height: 1.5;
-  margin: 0;
-}
-.account-hero h1 em {
-  font-style: normal;
-  color: #b25936;
-  font-weight: inherit;
-}
-.account-hero > div > p:last-child {
-  color: #6e7c62;
-  font-size: 13px;
-  line-height: 1.9;
-  margin: 11px 0 0;
-}
-.account-hero > button {
-  flex: none;
-}
-.account-connect-state {
-  display: flex;
-  align-items: center;
-  gap: 21px;
-  padding: 26px;
-  border: 1px solid #e6dcc9;
-  border-radius: 12px;
-  background: #fbf5e8;
-  margin-bottom: 31px;
-}
-.account-connect-state > span,
-.account-avatar {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  color: #b28c58;
-  background: #f1e6cd;
-}
-.account-connect-state > div {
-  flex: 1;
-  min-width: 0;
-}
-.account-connect-state h2 {
-  margin: 0 0 9px;
-  font-size: 19px;
-  font-weight: 500;
-}
-.account-connect-state p {
-  margin: 0;
-  max-width: 650px;
-  color: #7b7b60;
-  font-size: 12px;
-  line-height: 1.9;
-}
-.account-identity {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  padding: 27px 30px;
-  border: 1px solid #e6e3d3;
-  border-radius: 12px;
-  background: #fffdf7;
-  margin-bottom: 32px;
-}
-.account-avatar {
-  width: 64px;
-  height: 64px;
-  color: #9a9d73;
-  background: #f0f0df;
-}
-.account-identity-kicker {
-  color: #897e62;
-  font-size: 8px;
-  letter-spacing: 1.5px;
-}
-.account-identity h2 {
-  font-size: 23px;
-  line-height: 1.5;
-  font-weight: 500;
-  margin: 6px 0 8px;
-  overflow-wrap: anywhere;
-}
-.account-identity p {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 0;
-  font-size: 10px;
-  color: #6e7d5d;
-}
-.account-identity dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  min-width: 330px;
-  gap: 0;
-  margin: 0 0 0 auto;
-}
-.account-identity dl > div {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
-  text-align: center;
-  padding: 0 24px;
-  border-left: 1px solid #e9e4d6;
-}
-.account-identity dt {
-  color: #727d61;
-  font-size: 11px;
-}
-.account-identity dd {
-  margin: 0;
-  color: #495c3c;
-  font-family: Georgia, serif;
-  font-size: 31px;
-  line-height: 1.2;
-}
+.account-hero,
 .account-section-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 19px;
+  gap: var(--space-5);
+}
+.account-hero {
+  margin-bottom: var(--space-6);
+}
+.account-hero h1 {
+  margin: 0;
+  font-size: var(--font-title);
+  font-weight: 650;
+  line-height: var(--line-heading);
+  color: var(--text-primary);
+}
+.account-hero p {
+  margin: 12px 0 0;
+  font-size: var(--font-body);
+  color: var(--text-secondary);
+  line-height: var(--line-body);
+}
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
+  border-block: 1px solid var(--border-subtle);
+}
+.account-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+}
+.account-identity h2 {
+  font-size: var(--font-card);
+  font-weight: 550;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.account-identity dl {
+  display: flex;
+  gap: var(--space-7);
+  margin: 0 0 0 auto;
+}
+.account-identity dl>div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  min-width: 48px;
+  text-align: center;
+}
+.account-identity dd {
+  margin: 0;
+  font-size: var(--font-title);
+  font-weight: 550;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.account-identity dt {
+  font-size: var(--font-secondary);
+  color: var(--text-secondary);
+}
+.account-connect-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  border-radius: var(--radius-surface);
+  background: var(--surface-soft);
+}
+.account-connect-state>svg {
+  flex: none;
+  color: var(--action);
+}
+.account-connect-state>div {
+  flex: 1;
+  min-width: 0;
+}
+.account-connect-state h2 {
+  margin: 0 0 8px;
+  font-size: var(--font-section);
+  font-weight: 550;
+}
+.account-connect-state p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-secondary);
+  line-height: var(--line-body);
+}
+.account-recent {
+  margin-top: var(--space-7);
+}
+.account-section-title {
+  margin-bottom: var(--space-3);
 }
 .account-section-title h2 {
   margin: 0;
-  color: #526344;
-  font-size: 20px;
-  line-height: 1.5;
-  font-weight: 550;
+  font-size: var(--font-section);
+  font-weight: 600;
+  color: var(--text-primary);
 }
-.account-section-title .journey-kicker {
-  font-size: 8px;
-  color: #8a805f;
-  margin-bottom: 7px;
+.account-task-list {
+  border-top: 1px solid var(--border-subtle);
 }
-.account-section-title > span {
-  color: #788469;
-  font-size: 11px;
-}
-.account-guide-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 19px;
-}
-.account-guide-grid article {
+.account-task-list>button {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 24px;
-  border: 1px solid #e2e5d6;
-  border-radius: 11px;
-  background: #fffef8;
-}
-.account-guide-grid article:nth-child(2) {
-  background: #f6f8ee;
-}
-.account-guide-grid article:nth-child(3) {
-  background: #fbf6ec;
-}
-.account-guide-top {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 22px;
-}
-.account-guide-top > span {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border: 1px solid #e8dcc0;
-  border-radius: 11px;
-  color: #ad8952;
-  background: #fcf3de;
-}
-.account-guide-top > small {
-  color: #8d8162;
-  font-family: Georgia, serif;
-  font-size: 18px;
-}
-.account-guide-grid h3 {
-  margin: 0 0 12px;
-  font-size: 18px;
-  font-weight: 500;
-  color: #5d6f4d;
-}
-.account-guide-grid p {
-  margin: 0 0 16px;
-  font-size: 12px;
-  line-height: 1.95;
-  color: #728262;
-  flex: 1;
-}
-.account-guide-grid button {
-  align-self: flex-start;
-  font-size: 12px;
-}
-.account-lower {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 23px;
-  margin-top: 31px;
-  align-items: start;
-}
-.account-recent,
-.account-capabilities {
-  min-width: 0;
-  padding: 24px;
-  border: 1px solid #e4e5d6;
-  border-radius: 11px;
-  background: #fffdf7;
-}
-.account-refresh {
-  display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
-  border: 1px solid #dde3cc;
-  border-radius: 6px;
-  background: #fafbf0;
-  color: #70805c;
-  cursor: pointer;
-}
-.account-refresh:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-.account-task-list > button {
+  gap: var(--space-4);
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 17px 0;
+  min-height: 90px;
+  padding: 18px 4px;
   border: 0;
-  border-top: 1px solid #eceadd;
+  border-bottom: 1px solid var(--border-subtle);
   background: transparent;
-  color: #687c53;
+  color: var(--text-body);
   text-align: left;
   cursor: pointer;
 }
-.account-task-list > button:hover {
-  color: #b15935;
+.account-task-list>button:hover {
+  background: var(--surface-soft);
 }
 .account-task-icon {
   display: grid;
   place-items: center;
   flex: none;
-  width: 38px;
-  height: 42px;
-  background: #f4efdf;
-  border-radius: 7px;
-  color: #a38250;
+  width: 40px;
+  height: 44px;
+  color: var(--action);
 }
 .account-task-copy {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
 .account-task-copy strong {
-  font-size: 13px;
-  line-height: 1.6;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--font-body);
+  font-weight: 550;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .account-task-copy small {
-  color: #748263;
-  font-size: 10px;
-  line-height: 1.7;
+  font-size: var(--font-secondary);
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 .account-task-status {
   flex: none;
-  padding: 4px 7px;
-  border: 1px solid #e5d9bd;
-  border-radius: 5px;
-  color: #8b7249;
-  background: #fcf6e7;
-  font-size: 9px;
-  white-space: nowrap;
+  max-width: 145px;
 }
-.account-task-status.confirmed {
-  color: #607c42;
-  background: #f0f6e6;
-  border-color: #d6e2c2;
+.account-task-list>button>svg {
+  flex: none;
 }
-.account-task-status.failed {
-  color: #a6583d;
-  background: #fff1e6;
-  border-color: #e5c5ae;
+.account-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
 }
-.account-history-note,
-.account-service-note {
-  margin: 13px 0 0;
-  padding-top: 13px;
-  border-top: 1px solid #e7e7d8;
-  color: #6e7d5f;
-  font-size: 10px;
-  line-height: 1.9;
+.account-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: var(--space-6);
+  padding: var(--space-4) 0;
 }
-.account-capabilities > .account-section-title > svg {
-  color: #86966f;
+.account-guide-grid h3 {
+  font-size: var(--font-card);
+  font-weight: 550;
+  margin: 0 0 10px;
+}
+.account-guide-grid p {
+  font-size: var(--font-secondary);
+  line-height: var(--line-body);
+  color: var(--text-secondary);
+  margin: 0;
 }
 .account-capabilities ul {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: var(--space-3) 0;
 }
 .account-capabilities li {
   display: flex;
+  gap: var(--space-3);
   align-items: flex-start;
-  gap: 11px;
-  padding: 16px 0;
-  border-top: 1px solid #ecebdd;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
-.account-capabilities li > svg {
+.account-capabilities li>svg {
   flex: none;
-  color: #9a8d63;
+  color: var(--text-secondary);
   margin-top: 3px;
 }
-.account-capabilities li > div {
+.account-capabilities li>div {
   flex: 1;
   min-width: 0;
 }
 .account-capabilities li strong {
-  font-size: 12px;
-  font-weight: 500;
-  color: #62764e;
+  font-size: var(--font-body);
+  font-weight: 550;
 }
 .account-capabilities li p {
-  font-size: 10px;
-  line-height: 1.8;
-  color: #70825e;
+  font-size: var(--font-secondary);
+  color: var(--text-secondary);
+  line-height: var(--line-body);
   margin: 6px 0 0;
 }
-.account-capabilities li > span {
+.account-list-state,
+.account-no-tasks {
   display: flex;
-  align-items: center;
-  gap: 3px;
-  flex: none;
-  padding: 4px 6px;
-  border-radius: 5px;
-  color: #8a744c;
-  background: #fbf3e1;
-  font-size: 9px;
-}
-.account-capabilities li > span.ready {
-  color: #648247;
-  background: #eef4e2;
-}
-.account-capabilities > .journey-text-action {
-  font-size: 11px;
-  margin-top: 10px;
-}
-.account-no-tasks,
-.account-list-state {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 195px;
-  gap: 14px;
-  padding: 15px;
-  text-align: center;
-  color: #8f946c;
-}
-.account-no-tasks h3 {
-  font-size: 17px;
-  font-weight: 500;
-  margin: 0;
-  color: #64794d;
-}
-.account-no-tasks p {
-  color: #728361;
-  font-size: 12px;
-  margin: 0;
-  line-height: 1.8;
-}
-.account-list-state {
-  font-size: 12px;
-  line-height: 1.9;
+  gap: var(--space-4);
+  min-height: 155px;
+  padding: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
 }
 .account-list-state.error {
-  color: #a5663c;
+  color: var(--danger);
+  flex-wrap: wrap;
 }
-.account-footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  margin-top: 28px;
-  padding-top: 21px;
-  border-top: 1px solid #e6e6d7;
-  color: #6f805b;
+.account-no-tasks h3 {
+  font-size: var(--font-card);
+  font-weight: 550;
+  margin: 0 0 8px;
+  color: var(--text-primary);
 }
-.account-footer p {
+.account-no-tasks p {
+  font-size: var(--font-secondary);
   margin: 0;
-  font-size: 10px;
-  line-height: 1.8;
+  line-height: var(--line-body);
 }
-@media (max-width: 1100px) {
+@media(max-width:899px) {
   .account-page {
-    width: calc(100% - 48px);
+    width: calc(100% - 40px);
+    padding-top: var(--space-6);
   }
   .account-identity dl {
-    min-width: 260px;
-  }
-  .account-identity dl > div {
-    padding: 0 19px;
+    gap: var(--space-5);
   }
   .account-guide-grid {
-    gap: 14px;
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
   }
-  .account-guide-grid article {
-    padding: 21px;
-  }
-  .account-lower {
-    grid-template-columns: minmax(0, 1fr);
+  .account-hero {
+    gap: var(--space-3);
   }
 }
-@media (max-width: 899px) {
+@media(max-width:580px) {
+  .account-page {
+    padding-top: var(--space-5);
+  }
   .account-hero {
     align-items: flex-start;
-  }
-  .account-hero h1 {
-    font-size: 28px;
-  }
-  .account-hero h1 em {
-    display: block;
-  }
-  .account-hero > button {
-    font-size: 11px;
-    margin-top: 20px;
-  }
-  .account-connect-state {
     flex-wrap: wrap;
-    padding: 23px;
-    gap: 17px;
+    margin-bottom: var(--space-5);
   }
-  .account-connect-state > div {
-    min-width: 60%;
-  }
-  .account-connect-state > button {
-    margin-left: 77px;
+  .account-hero p {
+    font-size: var(--font-secondary);
   }
   .account-identity {
-    gap: 17px;
-    padding: 24px;
+    flex-wrap: wrap;
+  }
+  .account-identity>div {
+    flex: 1;
+    min-width: 0;
   }
   .account-identity dl {
-    min-width: 225px;
-  }
-  .account-identity dl > div {
-    padding: 0 15px;
-  }
-  .account-identity h2 {
-    font-size: 21px;
-  }
-  .account-guide-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .account-guide-grid article {
-    position: relative;
-    padding: 22px 24px 22px 95px;
-    min-height: 180px;
-  }
-  .account-guide-top {
-    position: absolute;
-    left: 24px;
-    top: 23px;
-    flex-direction: column;
-    gap: 16px;
+    justify-content: space-around;
+    width: 100%;
+    padding-top: var(--space-4);
     margin: 0;
-  }
-  .account-guide-top small {
-    font-size: 14px;
-  }
-  .account-guide-grid h3 {
-    font-size: 18px;
-  }
-  .account-guide-grid p {
-    max-width: 490px;
-  }
-  .account-section-title > span {
-    display: none;
-  }
-}
-@media (max-width: 580px) {
-  .account-page {
-    width: calc(100% - 32px);
-    padding-top: 24px;
-  }
-  .account-hero {
-    flex-direction: column;
-    gap: 17px;
-    margin-bottom: 22px;
-  }
-  .account-hero h1 {
-    font-size: 26px;
-    line-height: 1.6;
-  }
-  .account-hero > div > p:last-child {
-    font-size: 11px;
-  }
-  .account-hero > button {
-    margin: 0;
-    min-height: 39px;
+    gap: var(--space-5);
   }
   .account-connect-state {
-    padding: 19px;
-    gap: 14px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: var(--space-5);
   }
-  .account-connect-state > span {
-    width: 43px;
-    height: 43px;
-  }
-  .account-connect-state > div {
-    min-width: 0;
-    flex: 1;
+  .account-connect-state>svg {
+    display: none;
   }
   .account-connect-state h2 {
-    font-size: 16px;
-    line-height: 1.7;
+    font-size: var(--font-card);
   }
-  .account-connect-state p {
-    font-size: 11px;
-  }
-  .account-connect-state > button {
-    margin-left: 0;
-    font-size: 11px;
-  }
-  .account-identity {
-    flex-wrap: wrap;
-    padding: 21px 19px;
-    gap: 14px;
-  }
-  .account-avatar {
-    width: 47px;
-    height: 47px;
-  }
-  .account-identity > div {
-    flex: 1;
-    min-width: 0;
-  }
-  .account-identity h2 {
-    font-size: 20px;
-  }
-  .account-identity p {
-    font-size: 9px;
-    line-height: 1.8;
-  }
-  .account-identity-kicker {
-    font-size: 7px;
-    letter-spacing: 1px;
-  }
-  .account-identity dl {
+  .account-connect-state .ui-button {
     width: 100%;
-    min-width: 0;
-    margin: 8px 0 0;
-    padding-top: 19px;
-    border-top: 1px solid #e7e4d5;
   }
-  .account-identity dl > div {
-    border-left: 0;
-    border-right: 1px solid #e7e4d5;
+  .account-recent {
+    margin-top: var(--space-6);
   }
-  .account-identity dl > div:last-child {
-    border-right: 0;
-  }
-  .account-identity dd {
-    font-size: 28px;
-  }
-  .account-section-title h2 {
-    font-size: 18px;
-  }
-  .account-guide-grid article {
-    padding: 22px 19px 21px 79px;
-  }
-  .account-guide-top {
-    left: 19px;
-    top: 21px;
-  }
-  .account-guide-top > span {
-    width: 40px;
-    height: 40px;
-  }
-  .account-guide-grid h3 {
-    font-size: 17px;
-  }
-  .account-guide-grid p {
-    font-size: 11px;
-  }
-  .account-guide-grid button {
-    font-size: 11px;
-  }
-  .account-lower {
-    margin-top: 24px;
-    gap: 18px;
-  }
-  .account-recent,
-  .account-capabilities {
-    padding: 21px 17px;
-  }
-  .account-task-list > button {
-    gap: 8px;
-  }
-  .account-task-copy strong {
-    font-size: 12px;
-  }
-  .account-task-copy small {
-    font-size: 9px;
+  .account-task-list>button {
+    display: grid;
+    grid-template-columns: 24px minmax(0,1fr);
+    gap: 8px 12px;
+    padding: 18px 0;
   }
   .account-task-icon {
-    width: 31px;
-    height: 37px;
+    grid-row: 1/3;
+    width: 24px;
+    align-self: start;
+  }
+  .account-task-copy {
+    grid-column: 2;
   }
   .account-task-status {
-    font-size: 8px;
-    padding: 4px 5px;
+    grid-column: 2;
+    justify-self: start;
   }
-  .account-task-list > button > svg {
+  .account-task-list>button>svg {
     display: none;
   }
-  .account-capabilities li {
-    gap: 8px;
+  .account-shortcuts {
+    display: grid;
+    grid-template-columns: 1fr;
   }
-  .account-capabilities li p {
-    font-size: 10px;
+  .account-shortcuts .ui-button {
+    justify-content: flex-start;
   }
-  .account-capabilities li > span {
-    font-size: 8px;
-    max-width: 101px;
-    text-align: center;
+  .account-shortcuts .ui-button>svg:last-child {
+    margin-left: auto;
   }
-  .account-footer {
+  .account-no-tasks {
     align-items: flex-start;
-    padding: 19px 6px 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: var(--space-5) 0;
   }
-  .account-footer > svg {
-    flex: none;
-    margin-top: 2px;
+  .account-capabilities li {
+    flex-wrap: wrap;
   }
-  .account-footer p {
-    font-size: 9px;
+  .account-capabilities li>.ui-status {
+    margin-left: 32px;
+  }
+  .account-capabilities li>div {
+    flex: 1 1 70%;
+  }
+}
+@media(max-width:360px) {
+  .account-page {
+    width: calc(100% - 32px);
   }
 }
 </style>

@@ -119,3 +119,14 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 打开最近任务会进入 `/plan?run=<id>` 或 `/journey/stories?run=<id>&compose=story&city=<adcode>`，读取原版本；不重新创建、不自动授权或确认。直接打开私人链接时，验证后恢复完整本地路径。编辑后离开会提醒；取消保留输入，主动放弃才导航。浏览器刷新／关闭的提醒不等于自动存稿，未提交内容只保留于当前页面内存。
 
 第四轮80项前端／18项真实浏览器、类型检查及生产构建通过；当前服务四屏宽只读检查无写请求。`docs/design/round4/index.html` 为已实施结果的截图对照，`README.md` 为操作指引。当前服务截图遮盖私人身份与任务文字，完整功能图来自独立验收库。
+
+
+## 当前前端：设计质量治理改稿
+
+最新页面保留方案A。规划首屏写想法，地点缺口在基本安排后补充；我的档案优先最近任务；记忆直接按城市浏览；创作从自己的照片开始。地图、未知、读取授权与保存确认继续使用原业务。
+
+当前正式审阅为docs/design/governance/index.html，设计与操作见同目录README.md、DESIGN_SYSTEM.md、REVIEW.md。原round1—4证据是历史记录，当前隔离E2E默认报告与CI产物写governance；不要把旧轮次默认路径当作现行配置。
+
+运行scripts/verify_e2e.py新建独立数据库，不使用个人profile作为回归数据。可追加Playwright测试文件／过滤参数。当前83项前端、22项浏览器、类型检查／构建已通过；五屏宽及200%文字放大证据在design-checks。当前服务截图仅GET，遮盖个人内容，未自动创建旅行记录。
+
+根文字放大检查与实色背景对比取样不能替代完整WCAG或真实手机验收。在线Provider与生产媒体配置边界保持原运行手册要求。

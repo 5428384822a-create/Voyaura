@@ -91,7 +91,7 @@ function formatBytes(bytes: number): string {
     <section class="media-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="media-upload-title">
       <header>
         <div>
-          <p class="eyebrow">PRIVATE MEDIA · {{ city.adcode }}</p>
+
           <h2 id="media-upload-title">添加照片或 Vlog</h2>
         </div>
         <button type="button" title="关闭媒体上传" aria-label="关闭媒体上传" @click="emit('cancel')"><X :size="20" /></button>

@@ -127,7 +127,10 @@ def main() -> int:
             "Running isolated browser acceptance; fixtures are not real travel.",
             flush=True,
         )
-        return subprocess.call([npm, "run", "test:e2e"], cwd=ROOT / "web", env=env)
+        command = [npm, "run", "test:e2e"]
+        if sys.argv[1:]:
+            command.extend(["--", *sys.argv[1:]])
+        return subprocess.call(command, cwd=ROOT / "web", env=env)
     finally:
         # Only the exact two children launched by this invocation are terminated.
         for process in reversed(processes):

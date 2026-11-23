@@ -79,7 +79,7 @@ function trapFocus(event: KeyboardEvent) {
         <X :size="20" />
       </button>
       <div class="connection-icon"><LockKeyhole :size="28" /></div>
-      <p class="eyebrow">YOUR PRIVATE TRAVEL ARCHIVE</p>
+
       <h1 id="connection-title">连接你的私人旅程</h1>
       <p>输入本机服务提供的访问令牌，打开专属地图、行程和旅行记忆。</p>
       <p v-if="returnLabel" class="connection-return">
@@ -158,30 +158,30 @@ function trapFocus(event: KeyboardEvent) {
   place-items: center;
   margin-bottom: 25px;
   border-radius: 18px;
-  color: #53745b;
+  color: var(--text-secondary);
   background: #e2e9dd;
 }
 h1 {
-  font-size: 25px;
+  font-size: var(--font-title);
   letter-spacing: -1px;
   margin: 10px 0;
 }
 p {
-  font-size: 13px;
+  font-size: var(--font-secondary);
   line-height: 1.8;
-  color: #6b736c;
+  color: var(--text-secondary);
 }
 label {
   display: block;
-  font-size: 12px;
+  font-size: var(--font-secondary);
   font-weight: 600;
   margin: 22px 0 8px;
 }
 input {
   width: 100%;
   padding: 12px;
-  border: 1px solid #c9c5b8;
-  border-radius: 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
   background: #fffdf7;
 }
 .connection-submit {
@@ -193,7 +193,7 @@ input {
   margin: 14px 0 18px;
   padding: 13px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: white;
   background: var(--coral);
   cursor: pointer;
@@ -204,21 +204,21 @@ input {
 }
 small {
   display: block;
-  color: #777c74;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
   line-height: 1.7;
 }
 .connection-error {
-  color: #a33428;
+  color: var(--action);
 }
 .connection-return {
   margin: 16px 0 0;
   padding: 10px 12px;
   border: 1px solid #e6ddc8;
-  border-radius: 7px;
+  border-radius: var(--radius-surface);
   background: #faf3e3;
-  color: #8b7047;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
 }
 .disconnect {
   display: block;
@@ -226,8 +226,8 @@ small {
   padding: 7px;
   border: 0;
   background: transparent;
-  color: #ac4934;
-  font-size: 12px;
+  color: var(--action);
+  font-size: var(--font-secondary);
   cursor: pointer;
 }
 </style>

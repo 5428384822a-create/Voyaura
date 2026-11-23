@@ -37,7 +37,7 @@ describe('MediaDeleteDialog', () => {
 
     expect(wrapper.text()).toContain('riverside.jpg')
     expect(wrapper.text()).toContain('无法撤销')
-    await wrapper.get('.danger-primary').trigger('click')
+    await wrapper.get('.ui-button--destructive').trigger('click')
     expect(wrapper.emitted('confirm')).toHaveLength(1)
   })
 

@@ -1,20 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
+import UiButton from '../components/UiButton.vue'
 import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
   Camera,
-  Check,
-  Compass,
   ExternalLink,
   Map,
   MapPin,
   Search,
-  Sparkles,
-  Sun,
-  Waves,
-  Leaf,
   X,
 } from 'lucide-vue-next'
 import {
@@ -117,7 +112,7 @@ function exploreMood(id: TravelMood) {
           <div class="hero-light"></div>
         </div>
         <div class="hero-content">
-          <p class="hero-kicker"><span></span> FIND YOUR NEXT CHAPTER</p>
+
           <h1 id="discover-title">下一段旅程，<br />从心动开始<span>。</span></h1>
           <p class="hero-description">去一座想去的城，把沿途的风景慢慢收藏。</p>
           <div class="hero-search-area">
@@ -193,42 +188,37 @@ function exploreMood(id: TravelMood) {
         <div class="hero-location">
           <MapPin :size="14" /><span>中国 · 厦门</span><i></i><span>海风里的鼓浪屿</span>
         </div>
-        <div class="hero-type"><Compass :size="13" /><span>海风与慢生活</span></div>
       </section>
 
       <section class="discover-shortcuts" aria-label="旅行快捷入口">
         <button type="button" @click="explore()">
           <span class="shortcut-icon peach"><MapPin :size="22" /></span
-          ><span><strong>目的地</strong><small>找一座心动的城</small></span
+          ><span><strong>目的地</strong></span
           ><ArrowUpRight class="shortcut-arrow" :size="16" />
         </button>
         <button type="button" @click="emit('plan', { goal: '', pace: 'relaxed' })">
           <span class="shortcut-icon rose"><CalendarDays :size="22" /></span
-          ><span><strong>规划行程</strong><small>把想法安排妥当</small></span
+          ><span><strong>规划行程</strong></span
           ><ArrowUpRight class="shortcut-arrow" :size="16" />
         </button>
         <button type="button" @click="emit('map')">
           <span class="shortcut-icon mint"><Map :size="22" /></span
-          ><span><strong>旅行地图</strong><small>收藏每一次抵达</small></span
+          ><span><strong>旅行地图</strong></span
           ><ArrowUpRight class="shortcut-arrow" :size="16" />
         </button>
         <button type="button" @click="emit('stories')">
           <span class="shortcut-icon sand"><Camera :size="22" /></span
-          ><span><strong>旅行记忆</strong><small>留下沿途的故事</small></span
+          ><span><strong>旅行记忆</strong></span
           ><ArrowUpRight class="shortcut-arrow" :size="16" />
         </button>
-        <button type="button" @click="explore('想和小曦一起规划，慢慢探索一座城')">
-          <span class="shortcut-icon lilac"><Sparkles :size="22" /></span
-          ><span><strong>小曦同行</strong><small>陪你发现与记录</small></span
-          ><ArrowUpRight class="shortcut-arrow" :size="16" />
-        </button>
+
       </section>
 
       <div class="discover-lower-grid">
         <section class="destination-section" aria-labelledby="destination-heading">
           <header class="discover-section-heading">
             <div>
-              <p class="section-eyebrow">PLACES TO FALL FOR</p>
+
               <h2 id="destination-heading">总有一座城，让你想出发</h2>
               <p>从一份旅行灵感开始，慢慢走进当地的日常。</p>
             </div>
@@ -249,34 +239,9 @@ function exploreMood(id: TravelMood) {
             </button>
           </div>
           <div class="destination-grid">
-            <button
-              v-for="(destination, index) in visibleDestinations"
-              :key="destination.id"
-              type="button"
-              class="destination-card"
-              :aria-label="`规划${destination.name}旅行`"
-              @click="emit('plan', destinationIntent(destination.id))"
-            >
-              <span class="destination-photo"
-                ><img
-                  :src="destination.image"
-                  :alt="destination.imageAlt"
-                  :loading="index === 0 ? 'eager' : 'lazy'"
-                  decoding="async"
-                  width="960"
-                  height="640" /><span class="destination-photo-shade"></span
-                ><span class="destination-english">{{ destination.english }}</span
-                ><span class="destination-photo-arrow"><ArrowUpRight :size="19" /></span
-              ></span>
-              <span class="destination-content"
-                ><span class="destination-title"
-                  ><strong>{{ destination.name }}</strong
-                  ><span>{{ destination.headline }}</span></span
-                ><span class="destination-description">{{ destination.description }}</span
-                ><span class="destination-tags"
-                  ><span v-for="tag in destination.tags" :key="tag">{{ tag }}</span></span
-                ></span
-              >
+            <button v-for="(destination, index) in visibleDestinations" :key="destination.id" type="button" class="destination-card" :aria-label="`规划${destination.name}旅行`" @click="emit('plan', destinationIntent(destination.id))">
+              <span class="destination-photo"><img :src="destination.image" :alt="destination.imageAlt" :loading="index === 0 ? 'eager' : 'lazy'" decoding="async" width="960" height="640" /><span class="destination-photo-arrow"><ArrowUpRight :size="19" /></span></span>
+              <span class="destination-content"><span class="destination-title"><strong>{{ destination.name }}</strong><span>{{ destination.headline }}</span></span></span>
             </button>
           </div>
           <div class="travel-map-invite">
@@ -297,38 +262,13 @@ function exploreMood(id: TravelMood) {
         </section>
 
         <aside class="discovery-companion" aria-label="和小曦一起规划">
-          <div class="companion-art" aria-hidden="true">
-            <div class="companion-orbit"></div>
-            <span class="companion-ray ray-one"></span><span class="companion-ray ray-two"></span
-            ><span class="companion-ray ray-three"></span>
-            <div class="companion-sun"><Sun :size="36" :stroke-width="1.25" /></div>
-            <span class="companion-spark"><Sparkles :size="17" /></span
-            ><span class="companion-path"><Compass :size="19" /></span>
-          </div>
-          <p class="companion-eyebrow">YOUR TRAVEL COMPANION</p>
-          <h2>说说想法，<br />剩下的，一起安排。</h2>
-          <p class="companion-description">
-            我是小曦。想去哪里、喜欢什么，<br class="desktop-break" />都可以成为一段旅程的开始。
-          </p>
-          <div class="companion-prompts">
-            <button type="button" @click="explore('想去海边放空两天，看看海，走走老街')">
-              <Waves :size="15" />想去海边放空两天<ArrowUpRight :size="14" /></button
-            ><button type="button" @click="explore('喜欢自然风光，想规划一次轻松的周末旅行')">
-              <Leaf :size="15" />给周末，换一种风景<ArrowUpRight :size="14" />
-            </button>
-          </div>
-          <button
-            class="companion-start"
-            type="button"
-            @click="emit('plan', { goal: '', pace: 'relaxed' })"
-          >
-            <Sparkles :size="16" />和小曦规划旅程<ArrowRight :size="17" />
-          </button>
-          <p class="companion-note"><Check :size="12" />先成为草案，每一步由你确认</p>
+          <h2>想去哪里，<br />就从哪里开始。</h2>
+          <p class="companion-description">给小曦一个想法，把时间留给期待。</p>
+          <UiButton variant="secondary" @click="emit('plan', { goal: '', pace: 'relaxed' })">规划行程<ArrowRight :size="17" /></UiButton>
         </aside>
       </div>
       <footer class="discover-footer">
-        <p>Voyaura <span>·</span> Plan the journey. Shape the story.</p>
+        <p>Voyaura</p>
         <a href="/discover/credits.html" target="_blank" rel="noopener noreferrer"
           >影像署名与许可<ExternalLink :size="12"
         /></a>
@@ -375,15 +315,6 @@ function exploreMood(id: TravelMood) {
 .hero-light {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(249, 248, 243, 0.99) 0%,
-      rgba(249, 248, 243, 0.96) 22%,
-      rgba(249, 248, 243, 0.72) 39%,
-      rgba(249, 248, 243, 0.05) 65%
-    ),
-    linear-gradient(0deg, rgba(24, 48, 48, 0.12), transparent 35%);
 }
 .hero-content {
   position: relative;
@@ -391,37 +322,17 @@ function exploreMood(id: TravelMood) {
   max-width: 75%;
   padding: 42px 0 39px 46px;
 }
-.hero-kicker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 14px;
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: #8b8a7e;
-  font-weight: 650;
-}
-.hero-kicker > span {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f1774c;
-}
 .hero-content h1 {
-  font-size: 48px;
-  line-height: 1.24;
   letter-spacing: -1.8px;
   font-weight: 650;
-  color: #26332e;
+  color: var(--text-primary);
   margin: 0 0 15px;
 }
 .hero-content h1 > span {
   color: var(--brand-orange);
 }
 .hero-description {
-  color: #69736c;
-  font-size: 14px;
+  color: var(--text-secondary);
   line-height: 1.8;
   margin: 0 0 24px;
 }
@@ -433,15 +344,14 @@ function exploreMood(id: TravelMood) {
   display: flex;
   align-items: center;
   gap: 11px;
-  height: 58px;
   padding: 6px 7px 6px 18px;
   border: 1px solid #ffffffc9;
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: #fffffff5;
   box-shadow: 0 8px 30px #344d4712;
 }
 .discovery-search > svg {
-  color: #8b9990;
+  color: var(--text-secondary);
   flex: none;
 }
 .discovery-search input {
@@ -450,18 +360,14 @@ function exploreMood(id: TravelMood) {
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 14px;
   line-height: 1.6;
-  color: #34443c;
-}
-.discovery-search input::placeholder {
-  color: #919a93;
+  color: var(--text-secondary);
 }
 .discovery-search input::-webkit-search-cancel-button {
   display: none;
 }
 .discovery-search:focus-within {
-  outline: 2px solid #f3936e66;
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 .search-go {
@@ -472,11 +378,10 @@ function exploreMood(id: TravelMood) {
   flex: none;
   height: 44px;
   padding: 0 17px;
-  background: var(--brand-button);
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-surface);
   color: white;
-  font-size: 13px;
+  font-size: var(--font-secondary);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
@@ -490,7 +395,7 @@ function exploreMood(id: TravelMood) {
   padding: 4px;
   border: 0;
   background: transparent;
-  color: #939c95;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 .hero-suggestions {
@@ -499,19 +404,18 @@ function exploreMood(id: TravelMood) {
   flex-wrap: wrap;
   gap: 9px;
   margin-top: 14px;
-  color: #879087;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
 }
 .hero-suggestions > span {
-  font-size: 10px;
-  color: #8a938a;
+  font-size: var(--font-label);
+  color: var(--text-secondary);
 }
 .hero-suggestions button {
   border: 0;
   background: transparent;
   padding: 3px 0;
-  color: #67756b;
-  font-size: 11px;
+  font-size: var(--font-label);
   cursor: pointer;
 }
 .hero-suggestions button:hover {
@@ -533,40 +437,13 @@ function exploreMood(id: TravelMood) {
   padding: 9px 12px;
   border: 1px solid #ffffff6b;
   border-radius: 20px;
-  background: #ffffffe0;
   backdrop-filter: blur(10px);
-  color: #4c6258;
-  font-size: 11px;
+  font-size: var(--font-label);
 }
 .hero-location i {
   width: 1px;
   height: 10px;
   background: #c4cec5;
-}
-.hero-chapter {
-  position: absolute;
-  right: 24px;
-  top: 23px;
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  color: white;
-  text-shadow: 0 1px 8px #173e4a66;
-}
-.hero-chapter span {
-  margin-right: 8px;
-  font-size: 10px;
-  letter-spacing: 1px;
-}
-.hero-chapter i {
-  width: 5px;
-  height: 5px;
-  border-radius: 5px;
-  background: #ffffff80;
-}
-.hero-chapter i.active {
-  width: 17px;
-  background: white;
 }
 .search-city-panel {
   position: absolute;
@@ -575,7 +452,7 @@ function exploreMood(id: TravelMood) {
   right: 0;
   padding: 18px;
   border: 1px solid #ece7df;
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: #fffefa;
   box-shadow: 0 15px 40px #213d3524;
 }
@@ -586,19 +463,19 @@ function exploreMood(id: TravelMood) {
   gap: 10px;
 }
 .search-city-panel strong {
-  font-size: 14px;
+  font-size: var(--font-secondary);
   font-weight: 600;
 }
 .search-city-panel > div:first-child > button {
   border: 0;
   background: transparent;
-  color: #8b9389;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 5px;
 }
 .search-city-panel > p {
-  font-size: 12px;
-  color: #8b9389;
+  font-size: var(--font-secondary);
+  color: var(--text-secondary);
   line-height: 1.7;
   margin: 7px 0 15px;
 }
@@ -613,19 +490,19 @@ function exploreMood(id: TravelMood) {
   align-items: center;
   gap: 7px;
   border: 1px solid #eee9e0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 11px 9px;
   background: #fbfaf5;
-  color: #68776b;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--font-secondary);
   cursor: pointer;
 }
 .search-city-options > button > svg:first-child {
-  color: #e36c45;
+  color: var(--action);
 }
 .search-city-options > button > svg:last-child {
   margin-left: auto;
-  color: #a6afa4;
+  color: var(--text-secondary);
 }
 .search-city-options > button:hover {
   background: #fff0e8;
@@ -633,22 +510,15 @@ function exploreMood(id: TravelMood) {
 }
 .discover-shortcuts {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
   gap: 0;
-  margin: 21px 0 33px;
   padding: 18px 2px;
-  background: #fffefa;
-  border: 1px solid #efebe4;
-  border-radius: 14px;
-  box-shadow: 0 3px 10px #2c3c2a02;
+  border-radius: var(--radius-surface);
 }
 .discover-shortcuts > button {
   display: flex;
   align-items: center;
   gap: 13px;
-  padding: 4px 22px;
   border: 0;
-  border-right: 1px solid #eeeae3;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -663,27 +533,27 @@ function exploreMood(id: TravelMood) {
   width: 44px;
   height: 44px;
   flex: none;
-  border-radius: 14px;
+  border-radius: var(--radius-surface);
   transition: transform 0.2s;
 }
 .peach {
-  color: #df653e;
+  color: var(--action);
   background: #fff0e7;
 }
 .rose {
-  color: #dc706a;
+  color: var(--action);
   background: #fcecee;
 }
 .mint {
-  color: #4c9a84;
+  color: var(--text-secondary);
   background: #e9f3ee;
 }
 .sand {
-  color: #c28b37;
+  color: var(--text-secondary);
   background: #fcf2df;
 }
 .lilac {
-  color: #9880c4;
+  color: var(--text-secondary);
   background: #f1ecf8;
 }
 .discover-shortcuts > button:hover .shortcut-icon {
@@ -696,25 +566,22 @@ function exploreMood(id: TravelMood) {
   min-width: 0;
 }
 .discover-shortcuts strong {
-  font-size: 14px;
+  font-size: var(--font-secondary);
   font-weight: 600;
-  color: #3e4b43;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 .discover-shortcuts small {
-  font-size: 10px;
-  color: #959c92;
   white-space: nowrap;
 }
 .shortcut-arrow {
   display: none;
   flex: none;
   margin-left: auto;
-  color: #b4bbb0;
+  color: var(--text-secondary);
 }
 .discover-lower-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 28px;
   align-items: stretch;
 }
@@ -728,28 +595,19 @@ function exploreMood(id: TravelMood) {
   gap: 14px;
   margin: 0 0 19px;
 }
-.section-eyebrow {
-  font-size: 9px;
-  letter-spacing: 1.6px;
-  color: #a2a396;
-  font-weight: 650;
-  margin: 0 0 8px;
-}
 .discover-section-heading h2 {
-  font-size: 23px;
   line-height: 1.45;
   letter-spacing: -0.5px;
   font-weight: 650;
-  color: #303e35;
   margin: 0 0 7px;
 }
 .discover-section-heading > div > p:last-child {
-  font-size: 12px;
-  color: #8b9589;
+  color: var(--text-secondary);
   line-height: 1.7;
   margin: 0;
 }
 .quiet-link {
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -757,8 +615,8 @@ function exploreMood(id: TravelMood) {
   padding: 7px 0;
   border: 0;
   background: transparent;
-  color: #85917f;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
   cursor: pointer;
 }
 .quiet-link:hover {
@@ -776,12 +634,10 @@ function exploreMood(id: TravelMood) {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  min-height: 34px;
+  min-height: 44px;
   border: 1px solid transparent;
   border-radius: 18px;
   background: transparent;
-  font-size: 11px;
-  color: #8d9589;
   cursor: pointer;
 }
 .mood-filters > button.active {
@@ -805,24 +661,14 @@ function exploreMood(id: TravelMood) {
   display: block;
   overflow: hidden;
   padding: 0;
-  border: 1px solid #e9e5dc;
-  border-radius: 12px;
-  background: #fffefa;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 5px 20px #414b3a03;
-  transition:
-    transform 0.25s,
+  transition: transform 0.25s,
     box-shadow 0.25s;
-}
-.destination-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 25px #374a3914;
 }
 .destination-photo {
   position: relative;
   display: block;
-  aspect-ratio: 1.47;
   overflow: hidden;
 }
 .destination-photo > img {
@@ -840,16 +686,6 @@ function exploreMood(id: TravelMood) {
   inset: 0;
   background: linear-gradient(0deg, #18362b36, transparent 50%);
 }
-.destination-english {
-  position: absolute;
-  left: 16px;
-  bottom: 13px;
-  color: #fff9f1;
-  font-size: 9px;
-  letter-spacing: 2.5px;
-  font-weight: 650;
-  text-shadow: 0 1px 4px #173d2d33;
-}
 .destination-photo-arrow {
   position: absolute;
   right: 10px;
@@ -860,126 +696,23 @@ function exploreMood(id: TravelMood) {
   height: 30px;
   border-radius: 50%;
   background: #ffffffe8;
-  color: #607467;
+  color: var(--text-secondary);
 }
 .destination-content {
   display: block;
-  padding: 17px 15px 15px;
 }
 .destination-title {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   margin-bottom: 8px;
 }
 .destination-title > strong {
-  font-size: 20px;
   font-weight: 650;
-  color: #344237;
   line-height: 1.25;
-}
-.destination-title > span {
-  font-size: 12px;
-  color: #73806e;
-}
-.destination-description {
-  display: block;
-  font-size: 11px;
-  line-height: 1.8;
-  color: #939b8d;
-  margin-bottom: 14px;
-}
-.destination-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.destination-tags > span {
-  font-size: 9px;
-  line-height: 1.5;
-  padding: 4px 6px;
-  color: #829075;
-  background: #f2f4ea;
-  border-radius: 4px;
 }
 .discovery-companion {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 24px 23px 22px;
-  border: 1px solid #ebe3d3;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #fff7e8, #faf5e9 45%, #f1f2e7);
   overflow: hidden;
-}
-.companion-art {
-  position: relative;
-  width: 100%;
-  height: 105px;
-  flex: none;
-  margin-bottom: 18px;
-}
-.companion-orbit {
-  position: absolute;
-  width: 118px;
-  height: 118px;
-  left: 50%;
-  top: -8px;
-  transform: translateX(-50%);
-  border: 1px solid #e9dfbf;
-  border-radius: 50%;
-}
-.companion-orbit:after {
-  content: '';
-  position: absolute;
-  inset: 13px;
-  border: 1px dashed #e7debd;
-  border-radius: 50%;
-}
-.companion-sun {
-  position: absolute;
-  left: 50%;
-  top: 20px;
-  transform: translateX(-50%);
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  color: #c99a44;
-  background: linear-gradient(145deg, #fff3c5, #f6e0a6);
-  border: 5px solid #fff7de;
-  border-radius: 50%;
-  box-shadow: 0 10px 25px #b9a57914;
-}
-.companion-spark {
-  position: absolute;
-  left: 24%;
-  top: 4px;
-  display: grid;
-  place-items: center;
-  color: #dfa14d;
-}
-.companion-path {
-  position: absolute;
-  right: 13%;
-  bottom: 0;
-  display: grid;
-  place-items: center;
-  width: 33px;
-  height: 33px;
-  border: 1px solid #e8d9b8;
-  background: #fff9e7;
-  border-radius: 10px;
-  color: #a0a06f;
-  transform: rotate(12deg);
-}
-.companion-ray {
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  background: #e6b66b;
-  border-radius: 50%;
 }
 .ray-one {
   left: 9%;
@@ -997,86 +730,14 @@ function exploreMood(id: TravelMood) {
   width: 3px;
   height: 3px;
 }
-.companion-eyebrow {
-  font-size: 8px;
-  letter-spacing: 1.4px;
-  color: #a89978;
-  margin: 0 0 12px;
-  font-weight: 650;
-}
 .discovery-companion h2 {
-  font-size: 23px;
-  line-height: 1.55;
   font-weight: 600;
   letter-spacing: -0.6px;
-  margin: 0 0 12px;
-  color: #564e3a;
+  color: var(--text-secondary);
 }
 .companion-description {
-  font-size: 12px;
   line-height: 1.9;
-  color: #9a927c;
   margin: 0 0 19px;
-}
-.companion-prompts {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  width: 100%;
-  margin-top: auto;
-  margin-bottom: 20px;
-}
-.companion-prompts > button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 11px 9px;
-  border: 1px solid #e9e0cb;
-  border-radius: 8px;
-  color: #8f8368;
-  background: #fffdf47d;
-  font-size: 11px;
-  cursor: pointer;
-  text-align: left;
-}
-.companion-prompts > button > svg {
-  margin-left: auto;
-  color: #b4a689;
-  flex: none;
-}
-.companion-start {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 13px 8px;
-  border: 0;
-  border-radius: 8px;
-  color: white;
-  background: var(--brand-button);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.2s;
-}
-.companion-start:hover {
-  background: #bc4020;
-}
-.companion-start > svg:last-child {
-  margin-left: auto;
-}
-.companion-note {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  gap: 4px;
-  margin: 12px 0 0;
-  color: #a89d81;
-  font-size: 9px;
 }
 .travel-map-invite {
   display: flex;
@@ -1085,7 +746,7 @@ function exploreMood(id: TravelMood) {
   margin-top: 24px;
   padding: 23px 21px;
   border: 1px solid #e4e9de;
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: linear-gradient(100deg, #edf2e9, #f4f5ec 65%);
 }
 .map-invite-symbol {
@@ -1095,31 +756,31 @@ function exploreMood(id: TravelMood) {
   width: 52px;
   height: 52px;
   flex: none;
-  color: #829d7e;
+  color: var(--text-secondary);
 }
 .map-invite-symbol > svg:last-child {
   position: absolute;
   right: -1px;
   top: -1px;
-  color: #d48b57;
+  color: var(--action);
   fill: #faf6ed;
 }
 .map-invite-copy {
   min-width: 0;
 }
 .map-invite-copy h3 {
-  font-size: 15px;
+  font-size: var(--font-body);
   font-weight: 600;
-  color: #5d7155;
+  color: var(--text-secondary);
   margin: 0 0 7px;
 }
 .map-invite-copy p {
-  font-size: 11px;
-  color: #8e9d80;
+  font-size: var(--font-label);
   margin: 0;
   line-height: 1.7;
 }
 .travel-map-invite > button {
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1127,10 +788,10 @@ function exploreMood(id: TravelMood) {
   margin-left: auto;
   padding: 11px 12px;
   border: 1px solid #cddac3;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: #fffffa80;
-  color: #718566;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
   cursor: pointer;
 }
 .travel-map-invite > button:hover {
@@ -1142,8 +803,8 @@ function exploreMood(id: TravelMood) {
   justify-content: space-between;
   gap: 12px;
   padding: 29px 0 24px;
-  color: #a4aa9c;
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
 }
 .discover-footer p {
   margin: 0;
@@ -1155,12 +816,12 @@ function exploreMood(id: TravelMood) {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #9da68f;
+  color: var(--text-secondary);
   text-decoration: none;
-  font-size: 10px;
+  font-size: var(--font-label);
 }
 .discover-footer a:hover {
-  color: #60775c;
+  color: var(--text-secondary);
 }
 @media (min-width: 1600px) {
   .discover-container {
@@ -1173,7 +834,7 @@ function exploreMood(id: TravelMood) {
     padding: 50px 0 46px 55px;
   }
   .hero-content h1 {
-    font-size: 52px;
+    font-size: var(--font-display);
   }
   .discover-lower-grid {
     grid-template-columns: minmax(0, 1fr) 290px;
@@ -1190,13 +851,13 @@ function exploreMood(id: TravelMood) {
   .shortcut-icon {
     width: 38px;
     height: 38px;
-    border-radius: 12px;
+    border-radius: var(--radius-surface);
   }
   .discover-shortcuts strong {
-    font-size: 13px;
+    font-size: var(--font-secondary);
   }
   .discover-shortcuts small {
-    font-size: 9px;
+    font-size: var(--font-label);
   }
   .discover-lower-grid {
     grid-template-columns: minmax(0, 1fr) 250px;
@@ -1209,27 +870,25 @@ function exploreMood(id: TravelMood) {
     padding: 14px 11px;
   }
   .destination-title > strong {
-    font-size: 19px;
-  }
-  .destination-description {
-    font-size: 10px;
+    font-size: var(--font-section);
   }
   .discovery-companion {
     padding: 23px 18px;
+    flex-direction: row;
+    min-width: 0;
+    flex-wrap: wrap;
   }
   .discovery-companion h2 {
-    font-size: 21px;
-  }
-  .companion-start {
-    font-size: 11px;
+    font-size: var(--font-section);
   }
   .travel-map-invite {
     padding: 20px 15px;
     gap: 10px;
   }
   .travel-map-invite > button {
+    min-height: 44px;
     padding: 9px;
-    font-size: 10px;
+    font-size: var(--font-label);
   }
 }
 @media (max-width: 899px) {
@@ -1250,26 +909,18 @@ function exploreMood(id: TravelMood) {
     padding: 34px 0 32px 30px;
   }
   .hero-content h1 {
-    font-size: 40px;
+    font-size: var(--font-display);
   }
   .hero-light {
     background: linear-gradient(90deg, #f9f8f3f5 0%, #f9f8f3d9 30%, #f9f8f32e 80%);
   }
-  .hero-kicker {
-    font-size: 8px;
-    letter-spacing: 1.5px;
-  }
   .hero-description {
-    font-size: 13px;
+    font-size: var(--font-secondary);
   }
   .hero-location {
-    font-size: 10px;
+    font-size: var(--font-label);
     right: 16px;
     bottom: 16px;
-  }
-  .hero-chapter {
-    right: 20px;
-    top: 20px;
   }
   .discover-shortcuts {
     margin: 17px 0 28px;
@@ -1289,7 +940,7 @@ function exploreMood(id: TravelMood) {
     gap: 0;
   }
   .discover-shortcuts strong {
-    font-size: 12px;
+    font-size: var(--font-secondary);
     font-weight: 500;
   }
   .shortcut-icon {
@@ -1306,21 +957,18 @@ function exploreMood(id: TravelMood) {
     grid-template-columns: 120px minmax(0, 1fr);
     column-gap: 22px;
     padding: 25px;
-  }
-  .companion-art {
-    grid-row: 1/5;
-    height: 120px;
-    align-self: center;
-    margin: 0;
+    flex-direction: row;
+    min-width: 0;
+    flex-wrap: wrap;
   }
   .discovery-companion .companion-eyebrow,
-  .discovery-companion h2,
-  .companion-description,
-  .companion-start {
+.discovery-companion h2,
+.companion-description,
+.companion-start {
     grid-column: 2;
   }
   .discovery-companion h2 {
-    font-size: 22px;
+    font-size: var(--font-section);
   }
   .discovery-companion h2 > br {
     display: none;
@@ -1331,22 +979,8 @@ function exploreMood(id: TravelMood) {
   .desktop-break {
     display: none;
   }
-  .companion-prompts {
-    display: none;
-  }
-  .companion-start {
-    max-width: 290px;
-    justify-content: center;
-    padding: 12px;
-    font-size: 13px;
-  }
-  .companion-note {
-    grid-column: 2;
-    justify-content: flex-start;
-    font-size: 10px;
-  }
   .discover-section-heading h2 {
-    font-size: 22px;
+    font-size: var(--font-section);
   }
   .discover-footer {
     padding: 25px 0 20px;
@@ -1368,8 +1002,7 @@ function exploreMood(id: TravelMood) {
     object-position: 71% 46%;
   }
   .hero-light {
-    background:
-      linear-gradient(90deg, #faf8f2f5 0%, #faf8f2c4 37%, #faf8f23d 82%),
+    background: linear-gradient(90deg, #faf8f2f5 0%, #faf8f2c4 37%, #faf8f23d 82%),
       linear-gradient(0deg, #faf8f2e8 0%, #faf8f200 30%);
   }
   .hero-content {
@@ -1377,46 +1010,38 @@ function exploreMood(id: TravelMood) {
     max-width: 100%;
     padding: 28px 21px 34px;
   }
-  .hero-kicker {
-    font-size: 7px;
-    letter-spacing: 1.2px;
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-  .hero-kicker > span {
-    width: 5px;
-    height: 5px;
-  }
   .hero-content h1 {
-    font-size: 32px;
+    font-size: var(--font-title);
     line-height: 1.34;
     letter-spacing: -0.8px;
     margin-bottom: 11px;
   }
   .hero-description {
-    font-size: 11px;
+    font-size: var(--font-label);
     line-height: 1.8;
     max-width: 230px;
     margin-bottom: 22px;
   }
   .discovery-search {
-    height: 51px;
+    height: auto;
     padding: 5px 5px 5px 12px;
     gap: 8px;
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
+    min-height: 56px;
   }
   .discovery-search > svg {
     width: 18px;
     height: 18px;
   }
   .discovery-search input {
-    font-size: 12px;
+    font-size: var(--font-body);
+    min-height: 44px;
   }
   .search-go {
     height: 39px;
     width: 40px;
     padding: 0;
-    border-radius: 7px;
+    border-radius: var(--radius-surface);
     gap: 0;
   }
   .search-go > span {
@@ -1427,23 +1052,24 @@ function exploreMood(id: TravelMood) {
     margin-top: 12px;
   }
   .hero-suggestions button {
-    font-size: 9px;
+    min-height: 44px;
+    font-size: var(--font-label);
     line-height: 1.6;
   }
   .hero-suggestions > span {
-    font-size: 9px;
+    font-size: var(--font-label);
   }
   .hero-location {
     bottom: 12px;
     left: 22px;
     right: auto;
-    font-size: 8px;
+    font-size: var(--font-label);
     gap: 5px;
     padding: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
-    color: #788b7e;
+    color: var(--text-secondary);
     backdrop-filter: none;
   }
   .hero-location > svg {
@@ -1454,25 +1080,10 @@ function exploreMood(id: TravelMood) {
     height: 8px;
     background: #aebeb0;
   }
-  .hero-chapter {
-    top: 25px;
-    right: 18px;
-    gap: 3px;
-  }
-  .hero-chapter span {
-    display: none;
-  }
-  .hero-chapter i {
-    width: 3px;
-    height: 3px;
-  }
-  .hero-chapter i.active {
-    width: 11px;
-  }
   .discover-shortcuts {
     margin: 15px 0 27px;
     padding: 15px 4px 14px;
-    border-radius: 12px;
+    border-radius: var(--radius-surface);
   }
   .shortcut-icon {
     width: 36px;
@@ -1486,28 +1097,24 @@ function exploreMood(id: TravelMood) {
     gap: 8px;
   }
   .discover-shortcuts strong {
-    font-size: 10px;
+    font-size: var(--font-label);
     letter-spacing: 0;
   }
   .discover-section-heading {
     gap: 8px;
     margin-bottom: 15px;
   }
-  .section-eyebrow {
-    font-size: 7px;
-    letter-spacing: 1.3px;
-    margin-bottom: 7px;
-  }
   .discover-section-heading h2 {
-    font-size: 20px;
+    font-size: var(--font-section);
     letter-spacing: -0.6px;
     margin-bottom: 6px;
   }
   .discover-section-heading > div > p:last-child {
-    font-size: 10px;
+    font-size: var(--font-label);
     line-height: 1.8;
   }
   .more-destinations {
+    min-height: 44px;
     font-size: 0;
     min-width: 32px;
     height: 32px;
@@ -1521,14 +1128,14 @@ function exploreMood(id: TravelMood) {
     height: 16px;
   }
   .mood-filters {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 2px;
     margin-bottom: 16px;
   }
   .mood-filters > button {
     padding: 7px 9px;
-    min-height: 31px;
-    font-size: 10px;
+    min-height: 44px;
+    font-size: var(--font-label);
     gap: 4px;
     white-space: nowrap;
   }
@@ -1547,7 +1154,7 @@ function exploreMood(id: TravelMood) {
   .destination-card {
     flex: 0 0 226px;
     scroll-snap-align: start;
-    border-radius: 12px;
+    border-radius: var(--radius-surface);
     box-shadow: none;
   }
   .destination-card:hover {
@@ -1560,22 +1167,10 @@ function exploreMood(id: TravelMood) {
     padding: 15px 14px;
   }
   .destination-title > strong {
-    font-size: 21px;
+    font-size: var(--font-section);
   }
   .destination-title > span {
-    font-size: 12px;
-  }
-  .destination-description {
-    font-size: 10px;
-    margin-bottom: 12px;
-  }
-  .destination-tags > span {
-    font-size: 9px;
-  }
-  .destination-english {
-    font-size: 8px;
-    left: 13px;
-    bottom: 12px;
+    font-size: var(--font-secondary);
   }
   .travel-map-invite {
     position: relative;
@@ -1583,7 +1178,7 @@ function exploreMood(id: TravelMood) {
     gap: 11px;
     margin-top: 14px;
     padding: 17px 15px 18px;
-    border-radius: 12px;
+    border-radius: var(--radius-surface);
   }
   .map-invite-symbol {
     width: 37px;
@@ -1602,14 +1197,15 @@ function exploreMood(id: TravelMood) {
     padding-bottom: 32px;
   }
   .map-invite-copy h3 {
-    font-size: 14px;
+    font-size: var(--font-secondary);
     margin-bottom: 7px;
   }
   .map-invite-copy p {
-    font-size: 10px;
+    font-size: var(--font-label);
     line-height: 1.8;
   }
   .travel-map-invite > button {
+    min-height: 44px;
     position: absolute;
     left: 63px;
     bottom: 15px;
@@ -1617,8 +1213,8 @@ function exploreMood(id: TravelMood) {
     background: transparent;
     padding: 0;
     gap: 5px;
-    font-size: 10px;
-    min-height: 22px;
+    font-size: var(--font-label);
+    min-height: 44px;
   }
   .travel-map-invite > button > svg {
     width: 13px;
@@ -1628,43 +1224,10 @@ function exploreMood(id: TravelMood) {
     padding: 21px 18px;
     column-gap: 14px;
     grid-template-columns: 74px minmax(0, 1fr);
-    border-radius: 12px;
-  }
-  .companion-art {
-    height: 95px;
-  }
-  .companion-orbit {
-    width: 78px;
-    height: 78px;
-    top: 5px;
-  }
-  .companion-orbit:after {
-    inset: 9px;
-  }
-  .companion-sun {
-    width: 49px;
-    height: 49px;
-    top: 20px;
-    border-width: 4px;
-  }
-  .companion-sun > svg {
-    width: 29px;
-    height: 29px;
-  }
-  .companion-spark {
-    left: -4%;
-    top: 2px;
-  }
-  .companion-path {
-    width: 25px;
-    height: 25px;
-    right: -3%;
-    bottom: 7px;
-    border-radius: 8px;
-  }
-  .companion-path > svg {
-    width: 15px;
-    height: 15px;
+    border-radius: var(--radius-surface);
+    flex-direction: row;
+    min-width: 0;
+    flex-wrap: wrap;
   }
   .ray-one {
     left: -10%;
@@ -1673,13 +1236,8 @@ function exploreMood(id: TravelMood) {
     right: 3%;
     top: 3px;
   }
-  .companion-eyebrow {
-    font-size: 6px;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-  }
   .discovery-companion h2 {
-    font-size: 18px;
+    font-size: var(--font-card);
     letter-spacing: -0.4px;
     line-height: 1.5;
     margin-bottom: 8px;
@@ -1688,38 +1246,15 @@ function exploreMood(id: TravelMood) {
     display: none;
   }
   .companion-description {
-    font-size: 10px;
+    font-size: var(--font-label);
     line-height: 1.9;
     margin-bottom: 13px;
-  }
-  .companion-start {
-    padding: 11px 9px;
-    font-size: 11px;
-    min-height: 39px;
-    border-radius: 7px;
-    gap: 6px;
-  }
-  .companion-start > svg:first-child {
-    width: 14px;
-    height: 14px;
-  }
-  .companion-start > svg:last-child {
-    width: 14px;
-    height: 14px;
-  }
-  .companion-note {
-    font-size: 8px;
-    margin-top: 9px;
-  }
-  .companion-note > svg {
-    width: 10px;
-    height: 10px;
   }
   .discover-footer {
     align-items: flex-start;
     gap: 10px;
     padding: 23px 0 19px;
-    font-size: 8px;
+    font-size: var(--font-label);
   }
   .discover-footer p {
     max-width: 200px;
@@ -1729,7 +1264,7 @@ function exploreMood(id: TravelMood) {
     margin: 0 4px;
   }
   .discover-footer a {
-    font-size: 8px;
+    font-size: var(--font-label);
     gap: 3px;
     white-space: nowrap;
     line-height: 1.8;
@@ -1740,20 +1275,20 @@ function exploreMood(id: TravelMood) {
   }
   .search-city-panel {
     padding: 14px;
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
   }
   .search-city-panel strong {
-    font-size: 13px;
+    font-size: var(--font-secondary);
   }
   .search-city-panel > p {
-    font-size: 11px;
+    font-size: var(--font-label);
     line-height: 1.8;
   }
   .search-city-options {
     gap: 7px;
   }
   .search-city-options > button {
-    font-size: 12px;
+    font-size: var(--font-secondary);
     padding: 12px 7px;
     gap: 4px;
   }
@@ -1767,184 +1302,125 @@ function exploreMood(id: TravelMood) {
     scroll-behavior: auto;
   }
   .destination-card,
-  .destination-photo > img,
-  .shortcut-icon {
+.destination-photo > img,
+.shortcut-icon {
     transition: none;
   }
 }
-
-.hero-type {
-  position: absolute;
-  right: 22px;
-  top: 21px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid #ffffff7a;
-  border-radius: 20px;
-  color: #4e675e;
-  background: #ffffffe0;
-  font-size: 10px;
-  backdrop-filter: blur(10px);
-}
 .discover-shortcuts small {
-  font-size: 11px;
+  font-size: var(--font-label);
 }
 .discover-section-heading > div > p:last-child {
-  font-size: 13px;
-}
-.destination-description {
-  font-size: 12px;
-}
-.destination-tags > span {
-  font-size: 10px;
+  font-size: var(--font-secondary);
 }
 .mood-filters > button {
-  font-size: 12px;
+  font-size: var(--font-secondary);
 }
 .companion-description {
-  font-size: 13px;
-}
-.companion-prompts > button {
-  font-size: 12px;
-}
-.companion-note {
-  font-size: 10px;
+  font-size: var(--font-secondary);
 }
 .map-invite-copy p,
 .travel-map-invite > button {
-  font-size: 12px;
+  min-height: 44px;
+  font-size: var(--font-secondary);
 }
 .discover-footer,
 .discover-footer a {
-  font-size: 11px;
+  font-size: var(--font-label);
 }
 @media (max-width: 600px) {
   .hero-content h1 {
-    font-size: 32px;
+    font-size: var(--font-title);
   }
   .hero-description {
-    font-size: 13px;
+    font-size: var(--font-secondary);
     max-width: 260px;
   }
   .discover-hero {
     min-height: 355px;
   }
   .discovery-search input {
-    font-size: 14px;
+    font-size: var(--font-body);
+    min-height: 44px;
   }
   .hero-suggestions button,
-  .hero-suggestions > span {
-    font-size: 10px;
-    min-height: 25px;
+.hero-suggestions > span {
+    font-size: var(--font-label);
+    min-height: 44px;
   }
   .hero-suggestions {
     gap: 6px;
   }
-  .hero-type {
-    right: 15px;
-    top: 20px;
-    font-size: 8px;
-    gap: 4px;
-    padding: 6px 8px;
-  }
-  .hero-type > svg {
-    width: 11px;
-    height: 11px;
-  }
   .hero-location {
-    font-size: 10px;
+    font-size: var(--font-label);
     bottom: 12px;
   }
   .discover-shortcuts strong {
-    font-size: 11px;
+    font-size: var(--font-label);
   }
   .discover-section-heading > div > p:last-child {
-    font-size: 12px;
+    font-size: var(--font-secondary);
   }
   .destination-title > span {
-    font-size: 13px;
-  }
-  .destination-description {
-    font-size: 12px;
-  }
-  .destination-tags > span {
-    font-size: 10px;
+    font-size: var(--font-secondary);
   }
   .mood-filters > button {
-    font-size: 11px;
-    min-height: 40px;
+    font-size: var(--font-label);
+    min-height: 44px;
   }
   .more-destinations {
+    min-height: 44px;
     min-width: 40px;
     height: 40px;
   }
   .map-invite-copy p,
-  .travel-map-invite > button {
-    font-size: 11px;
+.travel-map-invite > button {
+    min-height: 44px;
+    font-size: var(--font-label);
   }
   .companion-description {
-    font-size: 12px;
-  }
-  .companion-note {
-    font-size: 9px;
+    font-size: var(--font-secondary);
   }
   .discover-footer,
-  .discover-footer a {
-    font-size: 10px;
+.discover-footer a {
+    font-size: var(--font-label);
   }
   .discover-footer p {
     max-width: 205px;
   }
   .discovery-companion h2 {
-    font-size: 19px;
-  }
-  .companion-start {
-    min-height: 44px;
+    font-size: var(--font-section);
   }
 }
-
 .hero-description,
-.discover-section-heading > div > p:last-child,
-.destination-description {
-  color: #6c786f;
+.discover-section-heading > div > p:last-child {
+  color: var(--text-secondary);
 }
 .discover-shortcuts small {
-  color: #7e8a7f;
+  color: var(--text-secondary);
 }
 .mood-filters > button {
-  color: #707d70;
-}
-.destination-title > span {
-  color: #687761;
-}
-.destination-tags > span {
-  color: #66745c;
+  color: var(--text-secondary);
 }
 .map-invite-copy p {
-  color: #6b7e5d;
+  color: var(--text-secondary);
 }
 .companion-description {
-  color: #81765f;
-}
-.companion-note {
-  color: #86795b;
+  color: var(--text-secondary);
 }
 .discover-footer,
 .discover-footer a {
-  color: #76836e;
+  color: var(--text-secondary);
 }
 .hero-suggestions button {
-  color: #5e7265;
+  min-height: 44px;
+  color: var(--text-secondary);
 }
 .discovery-search input::placeholder {
-  color: #77847a;
+  color: var(--text-secondary);
 }
-
 .discover-hero--immersive .hero-light {
-  background:
-    linear-gradient(90deg, #102c38b8 0%, #173a4866 42%, #173a4800 80%),
+  background: linear-gradient(90deg, #102c38b8 0%, #173a4866 42%, #173a4800 80%),
     linear-gradient(0deg, #132b3647, transparent 65%);
 }
 .discover-hero--immersive .hero-content h1 {
@@ -1952,20 +1428,15 @@ function exploreMood(id: TravelMood) {
   text-shadow: 0 2px 16px #172e3e26;
 }
 .discover-hero--immersive .hero-content h1 > span {
-  color: #ffb494;
+  color: var(--action);
 }
 .discover-hero--immersive .hero-description {
   color: #f4f8f2;
 }
-.discover-hero--immersive .hero-kicker {
-  color: #eff5f0;
-}
-.discover-hero--immersive .hero-kicker > span {
-  background: #ffb494;
-}
 .discover-hero--immersive .hero-suggestions,
 .discover-hero--immersive .hero-suggestions > span,
 .discover-hero--immersive .hero-suggestions button {
+  min-height: 44px;
   color: #f7fbf2;
 }
 .discover-hero--immersive .hero-suggestions i {
@@ -1973,8 +1444,7 @@ function exploreMood(id: TravelMood) {
 }
 @media (max-width: 600px) {
   .discover-hero--immersive .hero-light {
-    background:
-      linear-gradient(90deg, #122c39ba, #193c4666 65%, #1b3b453b),
+    background: linear-gradient(90deg, #122c39ba, #193c4666 65%, #1b3b453b),
       linear-gradient(0deg, #16323e55, transparent 70%);
   }
   .discover-hero--immersive .hero-location {
@@ -1982,6 +1452,213 @@ function exploreMood(id: TravelMood) {
   }
   .discover-hero--immersive .hero-location i {
     background: #daeadd;
+  }
+}
+.discover-shortcuts {
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 24px 0 40px;
+}
+.discover-shortcuts > button {
+  min-height: 64px;
+  padding: 8px 12px;
+  border-right: 0;
+}
+.discover-lower-grid {
+  grid-template-columns: minmax(0,1fr);
+}
+.discovery-companion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  flex-direction: row;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.discovery-companion h2 {
+  font-size: var(--font-section);
+  line-height: var(--line-heading);
+  margin: 0;
+}
+.discovery-companion h2 br {
+  display: none;
+}
+.discovery-companion p {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-body);
+  color: var(--text-secondary);
+}
+.destination-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.destination-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+.destination-card:focus-visible {
+  outline-offset: 5px;
+}
+.destination-photo {
+  border-radius: var(--radius-photo);
+  aspect-ratio: 1.55;
+}
+.destination-content {
+  padding: 18px 0 10px;
+}
+.destination-title {
+  gap: 9px;
+}
+.destination-title > strong {
+  font-size: var(--font-section);
+  color: var(--text-primary);
+}
+.destination-title > span {
+  font-size: var(--font-body);
+  color: var(--text-secondary);
+}
+.hero-content h1 {
+  font-size: var(--font-display);
+  line-height: 1.2;
+}
+.hero-description {
+  font-size: var(--font-body);
+}
+.discovery-search {
+  border-color: var(--border-control);
+  min-height: 56px;
+  height: auto;
+}
+.discovery-search input {
+  font-size: var(--font-body);
+  min-height: 44px;
+}
+.search-go {
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--action);
+}
+.hero-light {
+  background: linear-gradient(90deg,var(--canvas) 0%,#faf9f6df 27%,#faf9f645 52%,transparent 68%);
+}
+.discover-section-heading h2 {
+  font-size: var(--font-title);
+  color: var(--text-primary);
+}
+.hero-location {
+  color: var(--text-body);
+  background: #fffefbf2;
+}
+@media(max-width:899px) {
+  .discovery-companion {
+    flex-wrap: wrap;
+    flex-direction: row;
+    min-width: 0;
+  }
+  .discovery-companion p {
+    flex-basis: 100%;
+  }
+  .discover-shortcuts {
+    gap: 8px;
+  }
+  .shortcut-icon {
+    width: 42px;
+    height: 42px;
+  }
+  .discover-shortcuts > button {
+    padding: 8px 4px;
+  }
+  .discover-shortcuts strong {
+    font-size: var(--font-secondary);
+  }
+}
+@media(max-width:600px) {
+  .hero-content h1 {
+    font-size: var(--font-display);
+  }
+  .hero-light {
+    background: linear-gradient(90deg,#faf9f6f0,#faf9f685 70%,#faf9f640);
+  }
+  .hero-content {
+    padding: 28px 22px;
+  }
+  .discover-shortcuts {
+    margin: 20px 0 28px;
+  }
+  .shortcut-arrow {
+    display: none;
+  }
+  .discover-shortcuts>button {
+    flex-direction: column;
+    gap: 9px;
+  }
+  .discover-section-heading h2 {
+    font-size: var(--font-section);
+  }
+  .more-destinations {
+    min-height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .hero-suggestions {
+    font-size: var(--font-label);
+    gap: 2px 8px;
+    flex-wrap: wrap;
+  }
+  .hero-suggestions>span,
+.hero-suggestions>i {
+    display: none;
+  }
+  .hero-suggestions button {
+    min-height: 44px;
+    min-height: 44px;
+  }
+  .destination-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-right: 0;
+    padding-right: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .destination-photo {
+    aspect-ratio: 1.6;
+  }
+  .destination-content {
+    padding-top: 14px;
+  }
+  .destination-title>strong {
+    font-size: var(--font-section);
+  }
+  .discovery-companion h2 {
+    font-size: var(--font-section);
+  }
+  .discover-container {
+    width: calc(100% - 40px);
+  }
+}
+@media(max-width:360px) {
+  .discover-container {
+    width: calc(100% - 32px);
+  }
+  .hero-content {
+    padding-inline: 18px;
+  }
+  .discover-shortcuts strong {
+    font-size: var(--font-label);
   }
 }
 </style>

@@ -120,7 +120,7 @@ function submitPreview() {
   <div class="dialog-backdrop image-style-backdrop" role="presentation" @click.self="emit('close')">
     <section class="image-style-dialog" role="dialog" aria-modal="true" aria-labelledby="image-style-title">
       <header>
-        <div><p class="eyebrow">PRIVATE VISUAL LAB</p><h2 id="image-style-title">照片风格创作</h2></div>
+        <div><h2 id="image-style-title">照片风格创作</h2></div>
         <button type="button" title="关闭风格创作" aria-label="关闭风格创作" @click="emit('close')"><X :size="20" /></button>
       </header>
 

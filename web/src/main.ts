@@ -1,8 +1,9 @@
 import { createApp } from 'vue'
 import './style.css'
-import './styles/round-one.css'
-import './styles/round-three.css'
-import './styles/round-four.css'
+import './styles/product-shell.css'
+import './styles/journey.css'
+import './styles/design-tokens.css'
+import './styles/ui.css'
 import App from './App.vue'
 import { createProductRouter } from './router'
 

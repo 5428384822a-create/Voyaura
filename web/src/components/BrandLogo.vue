@@ -25,8 +25,8 @@ defineProps<{ compact?: boolean }>()
   align-items: center;
   gap: 8px;
   color: var(--brand-orange, #ef643b);
-  font-family: Arial, 'Microsoft YaHei', sans-serif;
-  font-size: 27px;
+  font-family: var(--font-family);
+  font-size: var(--font-brand);
   line-height: 1;
   font-weight: 750;
   letter-spacing: -1.2px;
@@ -41,7 +41,7 @@ defineProps<{ compact?: boolean }>()
 }
 @media (max-width: 600px) {
   .voyaura-logo {
-    font-size: 25px;
+    font-size: var(--font-brand);
     gap: 6px;
   }
   .voyaura-logo svg {

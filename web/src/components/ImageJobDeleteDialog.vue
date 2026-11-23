@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiButton from './UiButton.vue'
 import { AlertTriangle, LoaderCircle, Trash2, X } from 'lucide-vue-next'
 import type { AppErrorInfo, ImageJobDeletePreview } from '../types'
 
@@ -18,7 +19,7 @@ const emit = defineEmits<{
   <div class="dialog-backdrop image-job-delete-backdrop" role="presentation" @click.self="emit('cancel')">
     <section class="image-job-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="image-job-delete-title">
       <header>
-        <div><p class="eyebrow">REMOVE CREATION</p><h2 id="image-job-delete-title">删除生成记录</h2></div>
+        <div><h2 id="image-job-delete-title">删除生成记录</h2></div>
         <button type="button" title="关闭删除确认" aria-label="关闭删除确认" @click="emit('cancel')"><X :size="20" /></button>
       </header>
 
@@ -35,7 +36,7 @@ const emit = defineEmits<{
         <p class="delete-source-name">{{ preview.source_filename }}</p>
         <footer>
           <button type="button" class="secondary" @click="emit('cancel')">保留</button>
-          <button type="button" class="danger-primary" @click="emit('confirm')"><Trash2 :size="15" />确认删除</button>
+          <UiButton variant="destructive" type="button" @click="emit('confirm')"><Trash2 :size="15" />确认删除</UiButton>
         </footer>
       </div>
 

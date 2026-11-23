@@ -11,7 +11,7 @@ const token =
 const apiUrl = process.env.VOYAURA_E2E_API_URL ?? 'http://127.0.0.1:8018/api/v1'
 const headers = { Authorization: `Bearer ${token}` }
 const folder = new URL(
-  '../../docs/design/round4/journey-screenshots/',
+  '../../docs/design/governance/journey-screenshots/',
   import.meta.url,
 )
 mkdirSync(folder, { recursive: true })
@@ -111,6 +111,31 @@ test('第三轮：手动抵达预览与确认→真实文字记忆→带入日�
     .click()
   await expect(page.locator('.memory-composer-backdrop')).toHaveCount(0)
   await expect(archive).toContainText(title)
+
+  // Opening the action menu is read-only; deletion still requires its own preview.
+  const more = archive.locator('.memory-actions-more').first()
+  await more.locator('summary').click()
+  await expect(page.locator('.memory-delete-backdrop')).toHaveCount(0)
+  await more.getByRole('button', { name:'删除记忆', exact:true }).click()
+  const deletePreview = page.getByRole('alertdialog', { name:'删除城市记忆', exact:true })
+  await expect(deletePreview).toBeVisible()
+  await expect(page.locator('.memory-delete-backdrop')).toHaveCSS('opacity','1')
+  const destructive = deletePreview.getByRole('button', { name:'确认删除', exact:true })
+  const destructiveStyle = await destructive.evaluate(el => ({ color:getComputedStyle(el).color, background:getComputedStyle(el).backgroundColor, height:el.getBoundingClientRect().height }))
+  expect(destructiveStyle.color).toBe('rgb(180, 35, 47)')
+  expect(destructiveStyle.background).toBe('rgb(255, 254, 251)')
+  expect(destructiveStyle.height).toBeGreaterThanOrEqual(44)
+  await page.screenshot({ animations:'disabled', path:fileURLToPath(new URL('delete-preview-' + info.project.name + '.png',folder)) })
+  await deletePreview.getByRole('button', { name:'保留记忆', exact:true }).click()
+  await expect(deletePreview).toHaveCount(0)
+  expect((await (await request.get(apiUrl + '/cities/350200/memories', {headers})).json()).memories.length).toBe(memoryCount + 1)
+  const archiveTabs = archive.getByRole('tab')
+  await archiveTabs.first().focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(archiveTabs.nth(1)).toBeFocused()
+  await expect(archiveTabs.nth(1)).toHaveAttribute('aria-selected','true')
+  await page.keyboard.press('Home')
+  await expect(archiveTabs.first()).toBeFocused()
   await page.screenshot({
     path: fileURLToPath(new URL(`archive-${info.project.name}.png`, folder)),
   })

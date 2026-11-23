@@ -77,13 +77,13 @@ const emit = defineEmits<{ select: [view: AppView]; connect: []; xiaoxi: [] }>()
   min-height: 44px;
   border: 0;
   background: transparent;
-  font-size: 13px;
+  font-size: var(--font-secondary);
   white-space: nowrap;
   cursor: pointer;
-  color: #57645e;
+  color: var(--text-secondary);
 }
 .header-xiaoxi > svg {
-  color: #ce8c28;
+  color: var(--text-secondary);
 }
 .header-divider {
   width: 1px;
@@ -97,10 +97,10 @@ const emit = defineEmits<{ select: [view: AppView]; connect: []; xiaoxi: [] }>()
   height: 34px;
   border-radius: 50%;
   background: #efece4;
-  color: #67756a;
+  color: var(--text-secondary);
 }
 .header-account > svg {
-  color: #989e98;
+  color: var(--text-secondary);
 }
 @media (min-width: 900px) and (max-width: 1100px) {
   .product-header__inner {
@@ -123,13 +123,13 @@ const emit = defineEmits<{ select: [view: AppView]; connect: []; xiaoxi: [] }>()
     gap: 14px;
   }
   .header-divider,
-  .header-xiaoxi > span,
-  .header-account > span:not(.account-symbol),
-  .header-account > svg {
+.header-xiaoxi > span,
+.header-account > span:not(.account-symbol),
+.header-account > svg {
     display: none;
   }
   .header-xiaoxi {
-    width: 34px;
+    width: 44px;
     justify-content: center;
   }
   .header-xiaoxi > svg {

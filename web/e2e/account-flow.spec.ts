@@ -7,7 +7,7 @@ const token = process.env.VOYAURA_E2E_TOKEN!
 const api = process.env.VOYAURA_E2E_API_URL!
 const headers = { Authorization: `Bearer ${token}` }
 const folder = new URL(
-  '../../docs/design/round4/account-screenshots/',
+  '../../docs/design/governance/account-screenshots/',
   import.meta.url,
 )
 mkdirSync(folder, { recursive: true })

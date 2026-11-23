@@ -296,13 +296,6 @@ onBeforeUnmount(() => {
       <code>{{ mapIssue.code }}</code>
     </div>
 
-    <div class="map-watermark">
-      <span>CHINA · 旅行图鉴</span>
-      <small>{{
-        mapStatus === 'ready' ? 'AMAP · LOCA 2.0' : 'YOUR PRIVATE CITY INDEX'
-      }}</small>
-    </div>
-
     <div class="map-controls" aria-label="地图控制">
       <button
         type="button"

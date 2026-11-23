@@ -88,8 +88,9 @@ jobs:
         with:
           name: browser-acceptance
           path: |
-            docs/design/round4/e2e.xml
-            docs/design/round4/flow-screenshots/
-            docs/design/round4/practice-screenshots/
-            docs/design/round4/journey-screenshots/
-            docs/design/round4/account-screenshots/
+            docs/design/governance/e2e.xml
+            docs/design/governance/flow-screenshots/
+            docs/design/governance/practice-screenshots/
+            docs/design/governance/journey-screenshots/
+            docs/design/governance/account-screenshots/
+            docs/design/governance/design-checks/

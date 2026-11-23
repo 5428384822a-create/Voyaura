@@ -165,14 +165,14 @@ function dataFieldLabel(field: string) {
   <main class="journey-planner-view">
     <header class="journey-planner-header">
       <button type="button" title="返回地图" aria-label="返回地图" @click="emit('back')"><ArrowLeft :size="20" /></button>
-      <div><p class="eyebrow">MULTIMODAL JOURNEY DESK</p><h1>行程路线</h1></div>
+      <div><h1>行程路线</h1></div>
       <span><Route :size="17" />GCJ-02</span>
     </header>
 
     <div class="journey-planner-scroll">
       <section class="route-query-band" aria-labelledby="local-route-title">
         <div class="route-section-heading">
-          <div><p class="eyebrow">LOCAL & FIRST / LAST MILE</p><h2 id="local-route-title">市内与接驳路线</h2></div>
+          <div><h2 id="local-route-title">市内与接驳路线</h2></div>
           <small>高德 · 实时查询</small>
         </div>
 
@@ -202,7 +202,7 @@ function dataFieldLabel(field: string) {
       </section>
 
       <section class="intercity-band" aria-labelledby="intercity-title">
-        <div class="route-section-heading"><div><p class="eyebrow">INTERCITY PROVIDERS</p><h2 id="intercity-title">跨城铁路与航班</h2></div><small>班次 · 票价 · 余量</small></div>
+        <div class="route-section-heading"><div><h2 id="intercity-title">跨城铁路与航班</h2></div><small>班次 · 票价 · 余量</small></div>
         <div v-if="capabilityError" class="route-inline-error"><AlertTriangle :size="17" /><span>{{ capabilityError.message }} · {{ capabilityError.code }}</span></div>
         <div v-else-if="!capabilities" class="intercity-loading"><LoaderCircle class="spin" :size="22" />正在读取 Provider</div>
         <div v-else class="intercity-grid">

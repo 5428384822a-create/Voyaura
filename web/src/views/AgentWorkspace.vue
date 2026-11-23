@@ -46,6 +46,8 @@ import type {
   UserCandidate,
 } from '../api/agent'
 import AgentRouteMap from '../components/AgentRouteMap.vue'
+import UiButton from '../components/UiButton.vue'
+import UiStatus from '../components/UiStatus.vue'
 import AgentWorkflowSteps from '../components/AgentWorkflowSteps.vue'
 import { destinations } from '../content/discovery'
 import {
@@ -865,13 +867,7 @@ function eventLabel(status: string) {
               <ArrowLeft :size="19" />
             </button>
             <div>
-              <p class="eyebrow">
-                {{
-                  mode === 'plan'
-                    ? 'MAKE ROOM FOR THE JOURNEY'
-                    : 'KEEP THE MOMENTS CLOSE'
-                }}
-              </p>
+
               <h1>
                 {{
                   mode === 'plan'
@@ -888,10 +884,7 @@ function eventLabel(status: string) {
             </div>
           </div>
           <div class="workspace-header-actions">
-            <span class="private-badge"
-              ><ShieldCheck :size="15" />私人档案</span
-            >
-            <button
+            <UiButton variant="secondary"
               class="history-toggle secondary-action"
               type="button"
               aria-label="最近任务"
@@ -901,7 +894,7 @@ function eventLabel(status: string) {
             >
               <History :size="16" /><span>最近任务</span
               ><b>{{ history.length }}</b>
-            </button>
+            </UiButton>
           </div>
         </header>
         <section
@@ -914,41 +907,8 @@ function eventLabel(status: string) {
           ><ChevronRight :size="15" /><span><b>03</b>核对后保存</span>
         </section>
         <div v-if="mode === 'plan'" class="workflow-bar">
-          <AgentWorkflowSteps :phase="taskPhase" /><span class="workflow-note"
-            ><Sun :size="14" />和小曦，一步一步来</span
-          >
+          <AgentWorkflowSteps :phase="taskPhase" />
         </div>
-        <section
-          v-if="needsPlaceSource"
-          class="place-source-notice"
-          aria-label="生成行程前的地点条件"
-        >
-          <span class="source-notice-icon"><MapPin :size="21" /></span>
-          <div>
-            <h2>先补上地点信息，再安排行程。</h2>
-            <p>{{ placeSourceExplanation }}</p>
-            <small
-              >没有地点来源时，任务会返回“信息不足”，地图、时间线和保存区暂不会出现。</small
-            >
-          </div>
-          <div class="source-notice-actions">
-            <button
-              class="secondary-action"
-              type="button"
-              :disabled="busy"
-              @click="openCandidates"
-            >
-              补充自己的地点</button
-            ><button
-              class="primary-action"
-              type="button"
-              :disabled="busy"
-              @click="loadPracticeBrief"
-            >
-              填入离线演练条件<ArrowRight :size="15" />
-            </button>
-          </div>
-        </section>
         <section
           v-if="inputPractice || resultPractice"
           ref="practiceNotice"
@@ -958,24 +918,16 @@ function eventLabel(status: string) {
           <span class="practice-label"
             ><Compass :size="15" />离线演练 · 虚拟地点</span
           >
-          <p>
-            地点与坐标是明确标注的演示输入；使用真实接口生成规则草案，并可体验地图联动、执行记录和确认保存。本次不调用在线模型或地图查询。
-          </p>
-          <p v-if="!run">
-            条件已填好，点击下方“生成离线演练草案”即可开始。填入条件本身不会创建任务。
-          </p>
-          <small
-            >生成会创建一条带“离线演练”标记的任务；只有主动确认后，才会存入当前私人档案，不会点亮城市。</small
-          >
-          <button
+          <p>使用四个虚拟地点运行本地规划；不调用在线模型或地图查询。</p>
+          <small>主动开始后才创建演练任务，核对并确认后才保存，不点亮城市。</small>
+          <UiButton variant="primary"
             v-if="inputPractice && (!run || editingBrief) && !pendingRequest"
             class="primary-action"
             type="submit"
             form="travel-brief"
             :disabled="busy"
           >
-            开始演练<ArrowRight :size="15" /></button
-          ><button
+            开始演练<ArrowRight :size="15" /></UiButton><button
             v-if="practiceBackup"
             class="text-button"
             type="button"
@@ -988,7 +940,7 @@ function eventLabel(status: string) {
         <section v-if="showHistory" class="history-strip" aria-label="最近任务">
           <div>
             <div>
-              <p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p>
+
               <h2>接着上次的旅程</h2>
             </div>
             <button
@@ -1046,7 +998,7 @@ function eventLabel(status: string) {
                 ><small v-if="contextPhoto">目的地灵感图</small>
               </div>
               <div class="journey-brief-body">
-                <p class="eyebrow">YOUR TRAVEL BRIEF</p>
+
                 <h2>{{ summaryDays }} 天，按你的节奏。</h2>
                 <p class="journey-goal">{{ summaryGoal }}</p>
                 <dl>
@@ -1066,14 +1018,14 @@ function eventLabel(status: string) {
                     </dd>
                   </div>
                 </dl>
-                <button
+                <UiButton variant="secondary"
                   class="secondary-action"
                   type="button"
                   :disabled="busy"
                   @click="openBrief"
                 >
                   <SlidersHorizontal :size="15" />调整旅行条件
-                </button>
+                </UiButton>
                 <p class="summary-hint">调整条件后可以生成一份新草案。</p>
               </div>
             </section>
@@ -1122,22 +1074,16 @@ function eventLabel(status: string) {
                     aria-labelledby="wish-title"
                   >
                     <header class="brief-card-heading">
-                      <span class="section-number">01</span>
+
                       <div>
                         <h2 id="wish-title">
                           {{
                             mode === 'plan'
-                              ? '先说说，你想怎样出发'
+                              ? '旅行想法'
                               : '想留下一段怎样的回忆'
                           }}
                         </h2>
-                        <p>
-                          {{
-                            mode === 'plan'
-                              ? '不用写得很完整，一个想法就可以开始。'
-                              : '保留你在旅途中亲自写下的细节。'
-                          }}
-                        </p>
+                        <p v-if="mode === 'story'">保留你在旅途中亲自写下的细节。</p>
                       </div>
                       <Sparkles :size="19" />
                     </header>
@@ -1168,22 +1114,16 @@ function eventLabel(status: string) {
                   </section>
                   <section class="brief-card" aria-labelledby="basic-title">
                     <header class="brief-card-heading">
-                      <span class="section-number">02</span>
+
                       <div>
                         <h2 id="basic-title">
                           {{
                             mode === 'plan'
-                              ? '把时间和目的地定下来'
+                              ? '基本安排'
                               : '选好这一段回忆'
                           }}
                         </h2>
-                        <p>
-                          {{
-                            mode === 'plan'
-                              ? '先确定大致安排，细节可以慢慢调整。'
-                              : '仅整理所选城市、日期范围内的记录。'
-                          }}
-                        </p>
+                        <p v-if="mode === 'story'">仅整理所选城市、日期范围内的记录。</p>
                       </div>
                     </header>
                     <div class="basic-fields">
@@ -1246,13 +1186,19 @@ function eventLabel(status: string) {
                       预算只核对已知景点费用，住宿、餐饮与交通另行安排。
                     </p>
                   </section>
+                  <section v-if="needsPlaceSource" class="place-source-notice" aria-label="生成行程前的地点条件">
+                    <UiStatus tone="warning">{{ capabilities?.amap_configured ? '请补充地点或授权在线查询' : '地点查询尚未连接' }}</UiStatus>
+                    <p>补充想去的地点后即可安排行程，也可以先用虚拟地点演练。</p>
+                    <div class="source-notice-actions"><UiButton variant="secondary" :disabled="busy" @click="openCandidates">补充自己的地点</UiButton><UiButton variant="tertiary" :disabled="busy" @click="loadPracticeBrief">填入离线演练条件<ArrowRight :size="16" /></UiButton></div>
+                    <details><summary>地点来源与限制</summary><p>{{ placeSourceExplanation }} 没有地点来源时会返回“信息不足”。</p></details>
+                  </section>
                   <template v-if="mode === 'plan'">
                     <section
                       class="brief-card preferences-card"
                       aria-labelledby="preferences-title"
                     >
                       <header class="brief-card-heading">
-                        <span class="section-number">03</span>
+
                         <div>
                           <h2 id="preferences-title">留一点，属于你的偏好</h2>
                           <p>走快一点、慢一点，都由你决定。</p>
@@ -1461,14 +1407,14 @@ function eventLabel(status: string) {
                               /><span>这是必去地点</span></label
                             >
                           </fieldset>
-                          <button
+                          <UiButton variant="secondary"
                             class="secondary-action add-place"
                             type="button"
                             :disabled="candidates.length >= 12"
                             @click="addCandidate"
                           >
                             <Plus :size="15" />添加地点
-                          </button>
+                          </UiButton>
                         </div>
                       </details>
                     </section>
@@ -1519,7 +1465,7 @@ function eventLabel(status: string) {
                     ></label
                   >
                   <div class="brief-submit">
-                    <button
+                    <UiButton variant="primary"
                       class="primary-action"
                       type="submit"
                       :disabled="busy"
@@ -1537,7 +1483,7 @@ function eventLabel(status: string) {
                               : '一起安排这段旅程'
                             : '整理我的旅行故事'
                       }}<ArrowRight v-if="!busy" :size="17" />
-                    </button>
+                    </UiButton>
                     <p class="brief-footnote">
                       <ShieldCheck
                         :size="12"
@@ -1595,7 +1541,7 @@ function eventLabel(status: string) {
               <div class="working-symbol">
                 <Sun :size="40" /><LoaderCircle class="spin" :size="76" />
               </div>
-              <p class="eyebrow">A LITTLE THOUGHT GOES A LONG WAY</p>
+
               <h2>正在把想法，<br />安排成一段旅程。</h2>
               <p>
                 小曦正在核对输入、执行已授权工具并检查约束，完成后会显示草案与实际调用记录。
@@ -1609,12 +1555,10 @@ function eventLabel(status: string) {
               class="story-companion"
             >
               <div class="story-notebook-art" aria-hidden="true">
-                <BookOpen :size="72" :stroke-width="1" /><span
-                  >THE MOMENTS<br />WE KEEP.</span
-                ><i><MapPin :size="18" />{{ contextCity }}</i>
+                <BookOpen :size="72" :stroke-width="1" /><i><MapPin :size="18" />{{ contextCity }}</i>
               </div>
               <div>
-                <p class="journey-kicker">YOUR WORDS, YOUR STORY</p>
+
                 <h2>让散落的记忆，<br />有一条自己的线索。</h2>
                 <p>
                   小曦只整理你授权的城市与日期中的已有记录。你可以查看原文、修改草稿，最后决定是否保存。
@@ -1649,7 +1593,7 @@ function eventLabel(status: string) {
                   <Sun :size="48" /><span></span>
                 </div>
                 <div>
-                  <span>YOUR NEXT CHAPTER</span>
+
                   <h2>
                     {{ contextCity.replace(/市$/, '') }}，<br />值得慢慢走。
                   </h2>
@@ -1658,7 +1602,7 @@ function eventLabel(status: string) {
               </div>
               <div class="companion-copy">
                 <span class="companion-seal"><Sun :size="23" /></span>
-                <p class="eyebrow">YOUR TRAVEL COMPANION</p>
+
                 <h2>你负责心动，<br />我们一起安排。</h2>
                 <p>
                   把想去的地方、喜欢的节奏告诉小曦。每天的安排与还要核实的细节，都会为你整理清楚。
@@ -1672,52 +1616,6 @@ function eventLabel(status: string) {
                       pace === 'relaxed' ? '慢一点，留些空白' : '均衡安排'
                     }}</span
                   >
-                </div>
-                <ol class="companion-promises">
-                  <li>
-                    <span>01</span>
-                    <div>
-                      <strong>把每天安排得刚刚好</strong>
-                      <p>结合时间、预算和已知地点整理草案。</p>
-                    </div>
-                  </li>
-                  <li>
-                    <span>02</span>
-                    <div>
-                      <strong>每一份信息，都有来处</strong>
-                      <p>保留工具记录，标出需要再次核实的细节。</p>
-                    </div>
-                  </li>
-                  <li>
-                    <span>03</span>
-                    <div>
-                      <strong>最后一步，由你决定</strong>
-                      <p>查看、调整，再确认存入私人档案。</p>
-                    </div>
-                  </li>
-                </ol>
-                <div
-                  v-if="
-                    mode === 'plan' &&
-                    capabilities &&
-                    !capabilities.amap_configured
-                  "
-                  class="local-planning-note"
-                >
-                  <MapPin :size="17" />
-                  <div>
-                    <strong>带上你已经知道的地点</strong>
-                    <p>
-                      当前尚未连接地图查询。你可以补充地点和坐标，再生成一份条件草案。
-                    </p>
-                    <button
-                      class="text-button"
-                      type="button"
-                      @click="openCandidates"
-                    >
-                      补充想去的地点<ArrowRight :size="14" />
-                    </button>
-                  </div>
                 </div>
                 <p class="companion-bottom">
                   <ShieldCheck :size="13" />私人整理 · 确认后保存
@@ -1736,13 +1634,7 @@ function eventLabel(status: string) {
               </p>
               <header class="result-heading">
                 <div>
-                  <p class="eyebrow">
-                    {{
-                      run.kind === 'plan'
-                        ? 'YOUR JOURNEY, THOUGHTFULLY PLANNED'
-                        : 'YOUR TRAVEL STORY'
-                    }}
-                  </p>
+
                   <h2>{{ run.title }}</h2>
                 </div>
                 <span class="revision-label">版本 {{ run.revision }}</span>
@@ -1771,7 +1663,7 @@ function eventLabel(status: string) {
                     : '本地规则整理'
                 }}</span>
               </div>
-              <button
+              <UiButton variant="secondary"
                 v-if="run.status === 'running'"
                 class="secondary-action refresh-run"
                 type="button"
@@ -1779,7 +1671,7 @@ function eventLabel(status: string) {
                 @click="restore(run.id)"
               >
                 <RefreshCw :size="15" />刷新任务状态
-              </button>
+              </UiButton>
               <template v-if="hasPlan">
                 <div class="itinerary-facts">
                   <span><CalendarDays :size="15" />{{ summaryDate }} 出发</span
@@ -1853,7 +1745,7 @@ function eventLabel(status: string) {
                         :aria-pressed="activeDay === day.day"
                         @click="activeDay = day.day"
                       >
-                        <small>DAY {{ String(day.day).padStart(2, '0') }}</small
+                        <small>第 {{ day.day }} 天</small
                         ><strong>{{
                           day.date.slice(5).replace('-', ' / ')
                         }}</strong
@@ -1862,7 +1754,7 @@ function eventLabel(status: string) {
                     </div>
                     <div v-if="currentDay" class="day-heading">
                       <div>
-                        <p class="eyebrow">A DAY TO REMEMBER</p>
+
                         <h3>
                           第 {{ currentDay.day }} 天，慢慢走进{{
                             contextCity.replace(/市$/, '')
@@ -1962,13 +1854,13 @@ function eventLabel(status: string) {
                             aria-label="调整每天结束时间"
                         /></label>
                       </div>
-                      <button
+                      <UiButton variant="secondary"
                         class="secondary-action"
                         type="submit"
                         :disabled="busy"
                       >
                         <RefreshCw :size="14" />重新安排并检查
-                      </button>
+                      </UiButton>
                     </form>
                   </section>
                   <section
@@ -1984,9 +1876,7 @@ function eventLabel(status: string) {
                   >
                     <header class="panel-heading">
                       <div>
-                        <p v-if="inlineMap" class="map-eyebrow">
-                          THE PLACES ALONG THE WAY
-                        </p>
+
                         <h3 id="inline-map-title">
                           {{
                             inlineMap
@@ -2100,7 +1990,7 @@ function eventLabel(status: string) {
               >
               <template v-if="run.kind === 'story' && run.result.story_body"
                 ><div class="story-paper">
-                  <p class="eyebrow">FIELD NOTES · A PRIVATE STORY</p>
+
                   <label
                     ><span>故事标题</span
                     ><input
@@ -2115,15 +2005,14 @@ function eventLabel(status: string) {
                       :readonly="run.status === 'confirmed'"
                       rows="14"
                     ></textarea></label
-                  ><button
+                  ><UiButton variant="secondary"
                     v-if="run.status !== 'confirmed'"
                     class="secondary-action"
                     type="button"
                     :disabled="busy"
                     @click="editDraft()"
                   >
-                    保存草稿修改并重新检查</button
-                  ><small>{{
+                    保存草稿修改并重新检查</UiButton><small>{{
                     run.status === 'confirmed'
                       ? '已保存为独立私有快照；删除原记忆不会同步删除此故事。'
                       : '确认前请先保存你的修改。手动添加内容由你核实。'
@@ -2199,7 +2088,7 @@ function eventLabel(status: string) {
               >
                 <header>
                   <div>
-                    <p class="eyebrow">A TRACEABLE JOURNEY</p>
+
                     <h3 id="execution-heading">小曦做了什么</h3>
                   </div>
                   <span>{{ run.events.length }} 条执行记录</span>
@@ -2280,7 +2169,7 @@ function eventLabel(status: string) {
                 <div class="confirmation-heading">
                   <span><ShieldCheck :size="22" /></span>
                   <div>
-                    <p class="eyebrow">ONE LAST LOOK, THEN KEEP IT CLOSE</p>
+
                     <h3>把当前版本存入私人档案？</h3>
                   </div>
                 </div>
@@ -2308,14 +2197,13 @@ function eventLabel(status: string) {
                   }}</span></label
                 >
                 <div class="confirmation-actions">
-                  <button
+                  <UiButton variant="secondary"
                     class="secondary-action"
                     type="button"
                     :disabled="busy"
                     @click="clearConfirmation"
                   >
-                    再看看</button
-                  ><button
+                    再看看</UiButton><UiButton variant="primary"
                     class="primary-action"
                     type="button"
                     :disabled="
@@ -2326,7 +2214,7 @@ function eventLabel(status: string) {
                     @click="save"
                   >
                     {{ busy ? '正在保存…' : '确认保存到私人档案' }}
-                  </button>
+                  </UiButton>
                 </div>
               </section>
               <div v-else-if="canSave" class="save-action-card">
@@ -2337,7 +2225,7 @@ function eventLabel(status: string) {
                     ><span>核对当前版本后，再由你确认保存。</span>
                   </p>
                 </div>
-                <button
+                <UiButton variant="primary"
                   class="primary-action save-preview"
                   type="button"
                   :disabled="
@@ -2352,7 +2240,7 @@ function eventLabel(status: string) {
                   <ShieldCheck :size="17" />核对并保存当前草案<ArrowRight
                     :size="17"
                   />
-                </button>
+                </UiButton>
               </div>
               <div v-else-if="run.status !== 'running'" class="save-blocked">
                 <CircleAlert :size="18" />
@@ -2378,7 +2266,7 @@ function eventLabel(status: string) {
         </div>
         <footer class="workspace-footer">
           <span
-            >Voyaura · Plan the journey. Shape the story.
+            >Voyaura
             <a href="/discover/credits.html" target="_blank" rel="noopener"
               >影像署名</a
             ></span
@@ -2391,4 +2279,6 @@ function eventLabel(status: string) {
   </main>
 </template>
 
-<style scoped src="../styles/agent-workspace.css"></style>
+<style scoped src="../styles/agent-workspace.css">
+
+</style>

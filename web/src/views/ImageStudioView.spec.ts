@@ -128,7 +128,7 @@ describe('ImageStudioView', () => {
     expect(wrapper.text()).toContain('影像生成服务暂未连接')
     expect(wrapper.text()).toContain('创作灵感参考 · 非个人作品')
     expect(wrapper.find('.image-compare-slider').exists()).toBe(false)
-    await wrapper.get('.studio-start-copy .journey-primary').trigger('click')
+    await wrapper.get('.studio-pick-source').trigger('click')
     expect(wrapper.emitted('memories')).toEqual([[]])
     wrapper.unmount()
   })

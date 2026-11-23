@@ -35,13 +35,13 @@ const current = computed(
 <style scoped>
 .workflow-steps {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   list-style: none;
   gap: 20px;
   margin: 0;
   padding: 0;
-  color: #90958b;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--font-secondary);
 }
 .workflow-steps li {
   position: relative;
@@ -49,6 +49,9 @@ const current = computed(
   align-items: center;
   gap: 9px;
   min-height: 34px;
+  white-space: normal;
+  min-width: 0;
+  text-align: center;
 }
 .workflow-steps li:not(:last-child)::after {
   content: '';
@@ -66,16 +69,16 @@ const current = computed(
   display: grid;
   place-items: center;
   background: #fffefb;
-  color: #979c91;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
 }
 .complete {
-  color: #6d8064;
+  color: var(--text-secondary);
 }
 .complete .step-symbol {
   background: #eef3e8;
   border-color: #d7e2cb;
-  color: #647d56;
+  color: var(--text-secondary);
 }
 .current {
   color: var(--brand-ink-orange);
@@ -88,7 +91,7 @@ const current = computed(
 }
 .blocked .step-symbol {
   background: #fff5df;
-  color: #997a31;
+  color: var(--text-secondary);
   border-color: #e7d6a9;
 }
 .spin {
@@ -102,19 +105,27 @@ const current = computed(
 @media (max-width: 600px) {
   .workflow-steps {
     gap: 7px;
-    font-size: 10px;
+    font-size: var(--font-label);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .workflow-steps li {
+    flex-direction: column;
     gap: 6px;
-    white-space: nowrap;
+    white-space: normal;
+    min-width: 0;
+    text-align: center;
   }
   .workflow-steps li:not(:last-child)::after {
+    position: absolute;
+    top: 12px;
+    right: -9px;
+    width: 12px;
     margin-left: 0;
   }
   .step-symbol {
     width: 23px;
     height: 23px;
-    font-size: 10px;
+    font-size: var(--font-label);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -127,6 +138,8 @@ const current = computed(
     flex-direction: column;
     gap: 5px;
     min-width: 0;
+    white-space: normal;
+    text-align: center;
   }
   .workflow-steps li:not(:last-child)::after {
     position: absolute;

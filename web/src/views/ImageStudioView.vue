@@ -4,13 +4,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Camera,
-  Palette,
   ShieldCheck,
-  Sparkles,
   Download,
   Heart,
   Image as ImageIcon,
   LoaderCircle,
+  Palette,
   RefreshCw,
   Trash2,
 } from 'lucide-vue-next'
@@ -24,6 +23,8 @@ import {
   setImageJobFavorite,
 } from '../api/client'
 import ImageCompareSlider from '../components/ImageCompareSlider.vue'
+import UiButton from '../components/UiButton.vue'
+import UiStatus from '../components/UiStatus.vue'
 import ImageJobDeleteDialog from '../components/ImageJobDeleteDialog.vue'
 import type {
   AppErrorInfo,
@@ -234,31 +235,19 @@ onBeforeUnmount(() => {
                 <ArrowLeft :size="16" />旅程</button
               ><span>/</span><span>旅行影像工作台</span>
             </div>
-            <p class="journey-kicker">A NEW WAY TO REMEMBER</p>
-            <h1>给旅途，<em>再一种模样。</em></h1>
+
+            <h1>影像创作</h1>
             <p>从自己的照片出发，原片与每一次创作，都有来处。</p>
           </div>
-          <button
-            class="journey-secondary studio-pick-source"
+          <UiButton variant="primary"
+            class="studio-pick-source"
             type="button"
             @click="emit('memories')"
           >
             <Camera :size="17" />从旅行记忆选照片<ArrowRight :size="16" />
-          </button>
+          </UiButton>
         </header>
-        <div
-          v-if="catalog && !catalog.available"
-          class="studio-availability"
-          role="status"
-        >
-          <Palette :size="19" />
-          <div>
-            <strong>影像生成服务暂未连接</strong>
-            <p>
-              可以浏览已有作品与风格。连接生成服务后，再从自己的记忆照片发起创作。
-            </p>
-          </div>
-        </div>
+        <div v-if="catalog && !catalog.available" class="studio-availability" role="status"><UiStatus tone="warning">影像生成服务暂未连接</UiStatus><span>已有作品仍可查看。</span></div>
         <p v-else-if="catalogError" class="studio-inline-error" role="status">
           风格服务状态暂时无法读取。已有作品仍可查看。{{ catalogError.message }}
         </p>
@@ -321,66 +310,9 @@ onBeforeUnmount(() => {
             查看全部作品
           </button>
         </section>
-        <section
-          v-else-if="!jobs.length"
-          class="studio-start"
-          aria-label="开始照片创作"
-        >
-          <figure class="studio-inspiration">
-            <img
-              src="/discover/xiamen-coast.webp"
-              alt="厦门海岸创作灵感摄影，非个人作品或生成结果"
-            /><span class="studio-photo-label">创作灵感参考 · 非个人作品</span>
-            <figcaption>
-              <span>THE LIGHT WE REMEMBER</span
-              ><strong>把那一刻的光，<br />再留久一点。</strong
-              ><a href="/discover/credits.html" target="_blank" rel="noopener"
-                >摄影来源 ↗</a
-              >
-            </figcaption>
-          </figure>
-          <div class="studio-start-copy">
-            <span class="studio-start-symbol"><Sparkles :size="25" /></span>
-            <p class="journey-kicker">START WITH YOUR OWN PHOTO</p>
-            <h2>第一张旅行作品，<br />从你的原照片开始。</h2>
-            <p>
-              先在城市档案中选择一段记忆，添加照片，再打开“风格创作”。生成前会先核对来源、风格与处理范围。
-            </p>
-            <ol>
-              <li>
-                <b>01</b>
-                <div>
-                  <strong>选一张自己的照片</strong
-                  ><span>来自你已保存的旅行记忆。</span>
-                </div>
-              </li>
-              <li>
-                <b>02</b>
-                <div>
-                  <strong>设定风格，预览任务</strong
-                  ><span>查看处理说明，确认后才发起。</span>
-                </div>
-              </li>
-              <li>
-                <b>03</b>
-                <div>
-                  <strong>对比原片，保存喜欢的表达</strong
-                  ><span>成功作品可下载、收藏；原始照片保留。</span>
-                </div>
-              </li>
-            </ol>
-            <button
-              class="journey-primary"
-              type="button"
-              @click="emit('memories')"
-            >
-              去城市记忆选照片<ArrowRight :size="17" /></button
-            ><small
-              ><ShieldCheck
-                :size="13"
-              />此处的参考摄影不会写入你的私人档案。</small
-            >
-          </div>
+        <section v-else-if="!jobs.length" class="studio-start" aria-label="开始照片创作">
+          <div class="studio-start-copy"><h2>选一张照片，留住旅途的光。</h2><p>从城市记忆中选择自己的照片，原片与创作分别保留。</p><details class="ui-disclosure"><summary>如何创作</summary><ol><li>打开一段记忆，添加自己的照片。</li><li>选择风格，核对处理范围后确认生成。</li><li>成功后可对比原片、收藏或下载作品。</li></ol><p>当前生成服务尚未连接时，不会创建成功作品。</p></details></div>
+          <figure class="studio-inspiration"><img src="/discover/xiamen-coast.webp" alt="厦门海岸创作灵感摄影，非个人作品或生成结果" /><figcaption><span class="studio-photo-label">创作灵感参考 · 非个人作品</span><a href="/discover/credits.html" target="_blank" rel="noopener">摄影来源 ↗</a></figcaption></figure>
         </section>
         <div v-else class="studio-workspace">
           <aside class="studio-history" aria-label="生成历史">
@@ -605,13 +537,13 @@ onBeforeUnmount(() => {
             </footer>
           </aside>
         </div>
-        <section
+        <details
           v-if="catalog?.styles.length && !jobs.length && !favoriteOnly"
           class="studio-style-library"
           aria-label="可用风格目录"
-        >
+        ><summary>浏览风格目录</summary>
           <div>
-            <p class="journey-kicker">FIND YOUR EXPRESSION</p>
+
             <h2>先找到，喜欢的表达。</h2>
             <p>以下来自当前风格目录；选定原照片后可在创作窗口使用。</p>
           </div>
@@ -624,7 +556,7 @@ onBeforeUnmount(() => {
               <p>{{ style.description }}</p>
             </article>
           </div>
-        </section>
+        </details>
         <p class="studio-footer-note">
           <ShieldCheck
             :size="14"

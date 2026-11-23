@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import CityMemoryPanel from './CityMemoryPanel.vue'
 import type { CityMemoryDetail, VisitedCity } from '../types'
@@ -24,6 +24,28 @@ const detail: CityMemoryDetail = {
 }
 
 describe('CityMemoryPanel', () => {
+  it('switches journal and gallery using arrow, Home and End keys', async () => {
+    const wrapper = mount(CityMemoryPanel, {
+      props: { city, phase: 'ready', detail, error: null, mediaTasks: [], mediaTaskBusyId: null, mediaTaskError: null },
+      attachTo: document.body,
+    })
+    try {
+      await flushPromises()
+      const tabs = wrapper.findAll('[role=tab]')
+      ;(tabs[0]!.element as HTMLElement).focus()
+      await tabs[0]!.trigger('keydown', { key: 'ArrowRight' })
+      expect(tabs[1]!.attributes('aria-selected')).toBe('true')
+      expect(tabs[1]!.element).toBe(document.activeElement)
+      expect(tabs[0]!.attributes('tabindex')).toBe('-1')
+      await tabs[1]!.trigger('keydown', { key: 'Home' })
+      expect(tabs[0]!.element).toBe(document.activeElement)
+      await tabs[0]!.trigger('keydown', { key: 'End' })
+      expect(tabs[1]!.element).toBe(document.activeElement)
+      await tabs[1]!.trigger('keydown', { key: 'ArrowLeft' })
+      expect(tabs[0]!.attributes('aria-selected')).toBe('true')
+    } finally { wrapper.unmount() }
+  })
+
   it('shows a truthful empty city archive and opens Xiaoxi', async () => {
     const wrapper = mount(CityMemoryPanel, {
       props: {
@@ -92,6 +114,9 @@ describe('CityMemoryPanel', () => {
     })
 
     await wrapper.get('button[aria-label="编辑记忆"]').trigger('click')
+    expect(wrapper.get('.memory-actions-more').attributes('open')).toBeUndefined()
+    await wrapper.get('.memory-actions-more summary').trigger('click')
+    expect(wrapper.emitted('deleteMemory')).toBeUndefined()
     await wrapper.get('button[aria-label="删除记忆"]').trigger('click')
     await wrapper.get('button[aria-label="添加照片或 Vlog"]').trigger('click')
 

@@ -245,9 +245,6 @@ onBeforeUnmount(() => {
             </text>
           </g>
         </g>
-        <text x="20" y="28" font-size="9" fill="#73856a" letter-spacing="1.6">
-          VOYAURA · JOURNEY ATLAS
-        </text>
         <text :x="compact ? 326 : 501" y="28" font-size="11" fill="#73856a">N ↑</text>
       </svg>
     </div>
@@ -264,7 +261,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   margin: 0;
   border: 1px solid #d9e3d1;
-  border-radius: 11px;
+  border-radius: var(--radius-surface);
   background: #edf2e7;
 }
 .map-stage {
@@ -312,22 +309,22 @@ figcaption {
   flex-wrap: wrap;
   padding: 10px 12px;
   background: #f7f9f1;
-  color: #65775b;
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
   line-height: 1.7;
 }
 figcaption small {
-  font-size: 9px;
-  color: #708266;
+  font-size: var(--font-label);
+  color: var(--text-secondary);
 }
 .compact figcaption {
   flex-direction: column;
   align-items: flex-start;
-  font-size: 10px;
+  font-size: var(--font-label);
   padding: 10px;
 }
 .compact figcaption small {
-  font-size: 9px;
+  font-size: var(--font-label);
   line-height: 1.8;
 }
 @media (max-width: 600px) {
@@ -335,11 +332,11 @@ figcaption small {
     height: 230px;
   }
   figcaption {
-    font-size: 9px;
+    font-size: var(--font-label);
     padding: 9px 10px;
   }
   figcaption small {
-    font-size: 9px;
+    font-size: var(--font-label);
   }
 }
 </style>

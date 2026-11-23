@@ -99,3 +99,22 @@ E2E运行器使用新建`.local/e2e-d475b381d8/test.db`，真实运行迁移、U
 首次构建发现测试夹具的AgentResult结构不完整，补齐后重新全量验证；不以类型断言绕过契约。本轮未改后端、迁移、依赖锁、密钥，未重新宣称在线Provider、媒体栈、多人账户或CodeArts实质开发已完成。
 
 审阅HTML另经1440／390两宽度验证，六组流程截图、前后比较、图片加载与页面宽度均通过，见 `../design/round4/review-validation.json`。提交前检查108个变更文件，真实本机令牌匹配0、私人运行文件0，23个本地审阅链接全部存在。
+
+
+## 前端设计质量治理验收（2026-11-23）
+
+基线6a5c01e，独立分支codex/ui-design-governance。实际修改页面、复用按钮／状态与设计令牌，不修改API、DB、权限或依赖锁。
+
+| 检查 | 实际结果 | 证据 |
+| --- | --- | --- |
+| Web组件 | 21文件83项通过；命令22.17秒 | ../design/governance/web-tests.xml |
+| HTTP＋Chrome | 桌面11＋手机11，共22项通过；179.58秒 | ../design/governance/e2e.xml |
+| 类型检查／生产构建／PWA | 通过；当前资源字节数见JSON | ../design/governance/validation.json |
+| 五屏宽设计 | 6页×5宽度30组，90个实色文字样本最低4.89:1 | ../design/governance/design-checks/rendered-desktop.json |
+| 200%文字 | 桌面／手机各6页无横向溢出，实际输入可聚焦 | ../design/governance/design-checks/text200-*.json |
+| 当前服务只读 | 7页×5宽度35次，0写请求／页面异常／溢出 | ../design/governance/after/checks.json |
+| 审计／运行器 | npm生产0项已知漏洞；修改的运行器Ruff通过 | ../design/governance/validation.json |
+
+新增共享按钮验证原生type、form关联、必填校验和disabled／loading；档案指南按需展开不增加读取；城市视图键盘切换；真实更多→删除预览→取消，数据库记录不变。保存仍走真实摘要与主动确认，失败仍保留输入。隔离运行器新建.local/e2e-3f3ccc4fe1/test.db，迁移0001—0014；当前个人库没有写测试记录。
+
+人工审阅改前／改后桌面手机和关键结果、确认及文字放大图；本地index.html与overview.png可直接复核。全局装饰标签与重复说明删除，来源、未知及许可继续保留。后台原测试不作本轮复跑声明；在线Provider、生产存储、真实设备、读屏、全量WCAG和性能未在本轮验证。工作由Codex完成，不是CodeArts留证。

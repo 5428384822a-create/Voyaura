@@ -105,7 +105,7 @@ function formatDate(value: string): string {
     >
       <header>
         <div>
-          <p class="eyebrow">CITY MEMORY · {{ city.adcode }}</p>
+
           <h2 id="memory-composer-title">
             {{ mode === 'edit' ? '修改' : '写给' }}{{ city.name_zh }}的记忆
           </h2>
