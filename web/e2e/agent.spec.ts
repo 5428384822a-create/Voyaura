@@ -23,7 +23,7 @@ async function post(request: APIRequestContext, path: string, data: object) {
   return response.json()
 }
 function screenshots() {
-  const path = new URL('../../docs/design/round2-split/flow-screenshots/', import.meta.url)
+  const path = new URL('../../docs/design/experience-entry/flow-screenshots/', import.meta.url)
   mkdirSync(path, { recursive: true })
   return path
 }
@@ -156,7 +156,7 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   }
   writeFileSync(
     new URL(
-      `../../docs/design/round2-split/result-${testInfo.project.name}-viewport-check.json`,
+      `../../docs/design/experience-entry/result-${testInfo.project.name}-viewport-check.json`,
       import.meta.url,
     ),
     JSON.stringify(checks, null, 2),

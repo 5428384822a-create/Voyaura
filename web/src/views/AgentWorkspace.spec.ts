@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentWorkspace from './AgentWorkspace.vue'
 import AgentRouteMap from '../components/AgentRouteMap.vue'
+import { PRACTICE_MARKER } from '../content/plannerPractice'
 import * as api from '../api/agent'
 import type { AgentRun } from '../api/agent'
 
@@ -454,5 +455,92 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     expect(wrapper.find('.map-selection').exists()).toBe(false)
     expect(wrapper.findComponent(AgentRouteMap).props('selectedStopId')).toBeNull()
     expect(wrapper.find('.day-timeline').text()).toContain('保留的夹具地点')
+  })
+  it('演练入口只填写虚拟条件、不自动创建任务，并能恢复原输入', async () => {
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await wrapper.find('textarea').setValue('我自己原来填写的计划')
+    await wrapper.find('[aria-label="目的地"]').setValue('330100')
+    await wrapper.find('[aria-label="景点预算 / 元"]').setValue(180)
+    await wrapper.find('.permission-card input[type=checkbox]').setValue(true)
+    await button(wrapper, '填入离线演练条件').trigger('click')
+    await flushPromises()
+    expect(api.createAgentRun).not.toHaveBeenCalled()
+    expect(api.editAgentDraft).not.toHaveBeenCalled()
+    expect(wrapper.find('.practice-notice').text()).toContain('虚拟地点')
+    expect(wrapper.findAll('.candidate-content fieldset')).toHaveLength(4)
+    expect(
+      wrapper.find<HTMLInputElement>('.permission-card input[type=checkbox]').element.checked,
+    ).toBe(false)
+    expect(
+      wrapper.find('.permission-card input[type=checkbox]').attributes('disabled'),
+    ).toBeDefined()
+    await button(wrapper, '恢复我之前的输入').trigger('click')
+    await flushPromises()
+    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe('我自己原来填写的计划')
+    expect(wrapper.find<HTMLSelectElement>('[aria-label="目的地"]').element.value).toBe('330100')
+    expect(wrapper.find<HTMLInputElement>('[aria-label="景点预算 / 元"]').element.value).toBe('180')
+    expect(wrapper.findAll('.candidate-content fieldset')).toHaveLength(0)
+    expect(api.createAgentRun).not.toHaveBeenCalled()
+  })
+  it('主动生成演练时走创建和草案标记接口，明确关闭全部外部调用', async () => {
+    const value = fixture()
+    vi.mocked(api.createAgentRun).mockImplementation(async (payload) => ({
+      ...value,
+      request: { ...payload },
+    }))
+    vi.mocked(api.editAgentDraft).mockImplementation(async (_id, edit) => ({
+      ...value,
+      title: edit.title!,
+      revision: 2,
+      request: { ...vi.mocked(api.createAgentRun).mock.calls[0]![0] },
+    }))
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await button(wrapper, '填入离线演练条件').trigger('click')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    const payload = vi.mocked(api.createAgentRun).mock.calls[0]![0]
+    expect(payload.goal.startsWith(PRACTICE_MARKER)).toBe(true)
+    expect(payload.candidates).toHaveLength(4)
+    expect(payload.candidates.every((c) => c.name.startsWith(PRACTICE_MARKER))).toBe(true)
+    expect(payload.allow_external).toBe(false)
+    expect(payload.allow_model).toBe(false)
+    expect(payload.allow_memory_access).toBe(false)
+    expect(api.editAgentDraft).toHaveBeenCalledWith('test-run', {
+      expected_revision: 1,
+      title: expect.stringContaining(PRACTICE_MARKER),
+    })
+    expect(wrapper.find('.result-heading').text()).toContain(PRACTICE_MARKER)
+    expect(wrapper.find('.practice-notice').exists()).toBe(true)
+    expect(api.confirmAgentRun).not.toHaveBeenCalled()
+  })
+  it('演练标记写入失败可用同一请求号重试，不伪装成已完成', async () => {
+    const value = fixture()
+    vi.mocked(api.createAgentRun).mockImplementation(async (payload) => ({
+      ...value,
+      request: { ...payload },
+    }))
+    vi.mocked(api.editAgentDraft)
+      .mockRejectedValueOnce(new Error('明确测试的标记写入中断'))
+      .mockResolvedValueOnce({
+        ...value,
+        title: `${PRACTICE_MARKER} 虚拟地点规划`,
+        revision: 2,
+        request: { goal: `${PRACTICE_MARKER} 练习` },
+      })
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await button(wrapper, '填入离线演练条件').trigger('click')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('.workspace-error').text()).toContain('标记写入中断')
+    expect(wrapper.find('.save-preview').exists()).toBe(false)
+    const first = vi.mocked(api.createAgentRun).mock.calls[0]![0]
+    await button(wrapper, '重试同一任务').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(api.createAgentRun).mock.calls[1]![0]).toEqual(first)
+    expect(wrapper.find('.result-heading').text()).toContain(PRACTICE_MARKER)
+    expect(api.confirmAgentRun).not.toHaveBeenCalled()
   })
 })

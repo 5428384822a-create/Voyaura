@@ -48,6 +48,11 @@ import type {
 import AgentRouteMap from '../components/AgentRouteMap.vue'
 import AgentWorkflowSteps from '../components/AgentWorkflowSteps.vue'
 import { destinations } from '../content/discovery'
+import {
+  PRACTICE_MARKER,
+  isPracticeRequest,
+  practiceBrief as createPracticeBrief,
+} from '../content/plannerPractice'
 import type { DiscoveryIntent } from '../content/discovery'
 
 const props = defineProps<{
@@ -120,6 +125,118 @@ const confirmationAnchor = ref<HTMLElement | null>(null)
 const candidateDetails = ref<HTMLDetailsElement | null>(null)
 const editingBrief = ref(false)
 const resultTab = ref<'schedule' | 'map' | 'execution'>('schedule')
+const practiceBackup = ref<ReturnType<typeof captureBrief> | null>(null)
+const practiceNotice = ref<HTMLElement | null>(null)
+const inputPractice = computed(
+  () =>
+    mode.value === 'plan' && isPracticeRequest({ goal: goal.value, candidates: candidates.value }),
+)
+const resultPractice = computed(
+  () => run.value?.kind === 'plan' && isPracticeRequest(run.value.request),
+)
+const hasLocalPlace = computed(() =>
+  candidates.value.some(
+    (c) =>
+      c.name.trim() &&
+      c.longitude !== '' &&
+      c.latitude !== '' &&
+      Number.isFinite(Number(c.longitude)) &&
+      Number.isFinite(Number(c.latitude)),
+  ),
+)
+const needsPlaceSource = computed(
+  () =>
+    mode.value === 'plan' &&
+    !hasPlan.value &&
+    !inputPractice.value &&
+    !hasLocalPlace.value &&
+    (!capabilities.value?.amap_configured || !allowExternal.value),
+)
+const placeSourceExplanation = computed(() =>
+  capabilities.value
+    ? capabilities.value.amap_configured
+      ? '目前还没有候选地点，也尚未授权在线查询。请补充自己的地点，或在下方允许查询高德。'
+      : '当前尚未连接在线地点查询。只填写目的地和旅行想法，还不能生成具体站点；勾选查询授权也不会自动接通服务。'
+    : capabilitiesUnavailable.value
+      ? '暂时无法确认地点服务状态。你可以补充地点，或先用离线演练体验完整流程。'
+      : '正在读取地点服务状态。你也可以先用离线演练体验完整流程。',
+)
+function captureBrief() {
+  return {
+    goal: goal.value,
+    cityCode: cityCode.value,
+    startDate: startDate.value,
+    days: days.value,
+    budget: budget.value,
+    dailyStart: dailyStart.value,
+    dailyEnd: dailyEnd.value,
+    transport: transport.value,
+    pace: pace.value,
+    interests: interests.value,
+    mustVisit: mustVisit.value,
+    allowExternal: allowExternal.value,
+    allowModel: allowModel.value,
+    candidates: candidates.value.map((c) => ({ ...c })),
+  }
+}
+async function loadPracticeBrief() {
+  if (busy.value) return
+  if (!inputPractice.value) practiceBackup.value = captureBrief()
+  const example = createPracticeBrief()
+  goal.value = example.goal
+  cityCode.value = example.cityAdcode
+  startDate.value = localDate
+  days.value = 2
+  budget.value = ''
+  dailyStart.value = '09:00'
+  dailyEnd.value = '18:00'
+  transport.value = 'walking'
+  pace.value = 'relaxed'
+  interests.value = ''
+  mustVisit.value = ''
+  candidates.value = example.candidates.map((c) => ({ ...c }))
+  allowExternal.value = false
+  allowModel.value = false
+  allowMemory.value = false
+  run.value = null
+  pendingRequest.value = null
+  error.value = ''
+  errorCode.value = ''
+  selectedStopId.value = null
+  editingBrief.value = false
+  clearConfirmation()
+  await nextTick()
+  if (candidateDetails.value) candidateDetails.value.open = false
+  scrollTo(practiceNotice.value)
+}
+async function restorePreviousBrief() {
+  if (busy.value || !practiceBackup.value) return
+  const previous = practiceBackup.value
+  goal.value = previous.goal
+  cityCode.value = previous.cityCode
+  startDate.value = previous.startDate
+  days.value = previous.days
+  budget.value = previous.budget
+  dailyStart.value = previous.dailyStart
+  dailyEnd.value = previous.dailyEnd
+  transport.value = previous.transport
+  pace.value = previous.pace
+  interests.value = previous.interests
+  mustVisit.value = previous.mustVisit
+  candidates.value = previous.candidates.map((c) => ({ ...c }))
+  allowExternal.value = previous.allowExternal
+  allowModel.value = previous.allowModel
+  practiceBackup.value = null
+  run.value = null
+  pendingRequest.value = null
+  error.value = ''
+  errorCode.value = ''
+  selectedStopId.value = null
+  editingBrief.value = false
+  clearConfirmation()
+  await nextTick()
+  scrollTo(briefAnchor.value)
+}
 const splitQuery = window.matchMedia?.('(min-width: 1280px)')
 const isWideScreen = ref(splitQuery?.matches ?? false)
 const selectedStopId = ref<string | null>(null)
@@ -446,8 +563,8 @@ function buildRequest(): RunCreate {
             stay_minutes: Number(c.stay_minutes),
           }))
         : [],
-    allow_external: mode.value === 'plan' && allowExternal.value,
-    allow_model: mode.value === 'plan' && allowModel.value,
+    allow_external: mode.value === 'plan' && allowExternal.value && !inputPractice.value,
+    allow_model: mode.value === 'plan' && allowModel.value && !inputPractice.value,
     allow_memory_access: mode.value === 'story' && allowMemory.value,
     memory_ids: [],
   }
@@ -471,7 +588,19 @@ async function submit(retry = false) {
   try {
     await nextTick()
     scrollTo(resultAnchor.value)
-    useRun(await createAgentRun(payload))
+    let created = await createAgentRun(payload)
+    if (
+      payload.kind === 'plan' &&
+      isPracticeRequest({ goal: payload.goal, candidates: payload.candidates }) &&
+      ['awaiting_confirmation', 'needs_input'].includes(created.status) &&
+      !created.title.startsWith(PRACTICE_MARKER)
+    ) {
+      created = await editAgentDraft(created.id, {
+        expected_revision: created.revision,
+        title: `${PRACTICE_MARKER} ${payload.city_name} · 虚拟地点规划`,
+      })
+    }
+    useRun(created)
     pendingRequest.value = null
     await loadHistory()
   } catch (e) {
@@ -627,6 +756,64 @@ function eventLabel(status: string) {
             ><Sun :size="14" />和小曦，一步一步来</span
           >
         </div>
+        <section
+          v-if="needsPlaceSource"
+          class="place-source-notice"
+          aria-label="生成行程前的地点条件"
+        >
+          <span class="source-notice-icon"><MapPin :size="21" /></span>
+          <div>
+            <h2>先补上地点信息，再安排行程。</h2>
+            <p>{{ placeSourceExplanation }}</p>
+            <small>没有地点来源时，任务会返回“信息不足”，地图、时间线和保存区暂不会出现。</small>
+          </div>
+          <div class="source-notice-actions">
+            <button class="secondary-action" type="button" :disabled="busy" @click="openCandidates">
+              补充自己的地点</button
+            ><button
+              class="primary-action"
+              type="button"
+              :disabled="busy"
+              @click="loadPracticeBrief"
+            >
+              填入离线演练条件<ArrowRight :size="15" />
+            </button>
+          </div>
+        </section>
+        <section
+          v-if="inputPractice || resultPractice"
+          ref="practiceNotice"
+          class="practice-notice"
+          aria-label="离线演练说明"
+        >
+          <span class="practice-label"><Compass :size="15" />离线演练 · 虚拟地点</span>
+          <p>
+            地点与坐标是明确标注的演示输入；使用真实接口生成规则草案，并可体验地图联动、执行记录和确认保存。本次不调用在线模型或地图查询。
+          </p>
+          <p v-if="!run">
+            条件已填好，点击下方“生成离线演练草案”即可开始。填入条件本身不会创建任务。
+          </p>
+          <small
+            >生成会创建一条带“离线演练”标记的任务；只有主动确认后，才会存入当前私人档案，不会点亮城市。</small
+          >
+          <button
+            v-if="inputPractice && (!run || editingBrief) && !pendingRequest"
+            class="primary-action"
+            type="submit"
+            form="travel-brief"
+            :disabled="busy"
+          >
+            开始演练<ArrowRight :size="15" /></button
+          ><button
+            v-if="practiceBackup"
+            class="text-button"
+            type="button"
+            :disabled="busy"
+            @click="restorePreviousBrief"
+          >
+            <ArrowLeft :size="14" />恢复我之前的输入
+          </button>
+        </section>
         <section v-if="showHistory" class="history-strip" aria-label="最近任务">
           <div>
             <div>
@@ -734,7 +921,12 @@ function eventLabel(status: string) {
                   <BookOpen :size="16" />整理故事
                 </button>
               </div>
-              <form class="travel-brief" :aria-busy="busy" @submit.prevent="submit(false)">
+              <form
+                id="travel-brief"
+                class="travel-brief"
+                :aria-busy="busy"
+                @submit.prevent="submit(false)"
+              >
                 <fieldset class="brief-fields" :disabled="busy">
                   <section class="brief-card wish-card" aria-labelledby="wish-title">
                     <header class="brief-card-heading">
@@ -1047,7 +1239,11 @@ function eventLabel(status: string) {
                         <h2>工具使用，由你决定</h2>
                       </div>
                       <label class="consent"
-                        ><input v-model="allowExternal" type="checkbox" /><span
+                        ><input
+                          v-model="allowExternal"
+                          type="checkbox"
+                          :disabled="inputPractice"
+                        /><span
                           >允许查询高德地点与路线<small
                             >会向高德发送目的地、地点和出行方式，可能消耗服务额度。{{
                               mapAvailabilityNote
@@ -1058,7 +1254,7 @@ function eventLabel(status: string) {
                         ><input
                           v-model="allowModel"
                           type="checkbox"
-                          :disabled="!allowExternal"
+                          :disabled="!allowExternal || inputPractice"
                         /><span
                           >允许模型辅助理解本次需求<small
                             >只发送当前旅行需求，可能产生模型费用；不发送私人记忆。</small
@@ -1083,7 +1279,9 @@ function eventLabel(status: string) {
                         busy
                           ? '小曦正在整理…'
                           : mode === 'plan'
-                            ? '一起安排这段旅程'
+                            ? inputPractice
+                              ? '生成离线演练草案'
+                              : '一起安排这段旅程'
                             : '整理我的旅行故事'
                       }}<ArrowRight v-if="!busy" :size="17" />
                     </button>
@@ -1645,7 +1843,11 @@ function eventLabel(status: string) {
               <div v-if="run.status === 'confirmed'" class="saved-card" role="status">
                 <span><CircleCheck :size="26" /></span>
                 <div>
-                  <strong>这段{{ run.kind === 'plan' ? '旅程' : '故事' }}，已妥善收藏。</strong>
+                  <strong>{{
+                    resultPractice
+                      ? '演练草案已保存到当前档案。'
+                      : `这段${run.kind === 'plan' ? '旅程' : '故事'}，已妥善收藏。`
+                  }}</strong>
                   <p>保存在你的私人档案，可从“最近任务”重新打开。</p>
                 </div>
                 <ShieldCheck :size="20" />
@@ -1666,6 +1868,9 @@ function eventLabel(status: string) {
                   </div>
                 </div>
                 <p>{{ confirmation.summary }}</p>
+                <p v-if="resultPractice" class="practice-save-note">
+                  这是虚拟地点的离线演练。确认后会把带“离线演练”标记的草案保存到当前档案。
+                </p>
                 <p v-if="run.kind === 'story'">
                   保存后将形成独立故事副本；之后删除原记忆不会同步删除此副本。
                 </p>
