@@ -36,8 +36,13 @@ import type {
   UserCandidate,
 } from '../api/agent'
 import AgentRouteMap from '../components/AgentRouteMap.vue'
+import type { DiscoveryIntent } from '../content/discovery'
 
-const props = defineProps<{ initialKind?: 'plan' | 'story'; initialCity?: string }>()
+const props = defineProps<{
+  initialKind?: 'plan' | 'story'
+  initialCity?: string
+  initialIntent?: DiscoveryIntent | null
+}>()
 const emit = defineEmits<{ back: []; connect: [] }>()
 const mode = ref<'plan' | 'story'>(props.initialKind ?? 'plan')
 const cities = [
@@ -48,19 +53,19 @@ const cities = [
   { code: '510100', name: '成都市' },
   { code: '350200', name: '厦门市' },
 ]
-const cityCode = ref(props.initialCity ?? '440100')
-const goal = ref('')
+const cityCode = ref(props.initialIntent?.cityAdcode ?? props.initialCity ?? '440100')
+const goal = ref(props.initialIntent?.goal ?? '')
 const localDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
   .toISOString()
   .slice(0, 10)
 const startDate = ref(localDate)
-const days = ref(2)
+const days = ref(props.initialIntent?.days ?? 2)
 const budget = ref<number | ''>('')
 const dailyStart = ref('09:00')
 const dailyEnd = ref('18:00')
 const transport = ref<RunCreate['transport']>('transit')
-const pace = ref<RunCreate['pace']>('relaxed')
-const interests = ref('')
+const pace = ref<RunCreate['pace']>(props.initialIntent?.pace ?? 'relaxed')
+const interests = ref(props.initialIntent?.interests?.join('，') ?? '')
 const mustVisit = ref('')
 const allowExternal = ref(false)
 const allowModel = ref(false)
@@ -165,6 +170,17 @@ watch(
   () => props.initialCity,
   (v) => {
     if (v) cityCode.value = v
+  },
+)
+watch(
+  () => props.initialIntent,
+  (value) => {
+    if (!value) return
+    goal.value = value.goal
+    if (value.cityAdcode) cityCode.value = value.cityAdcode
+    interests.value = value.interests?.join('，') ?? ''
+    pace.value = value.pace ?? 'relaxed'
+    days.value = value.days ?? 2
   },
 )
 watch(mode, () => {
@@ -357,7 +373,7 @@ function eventLabel(status: string) {
   <main class="agent-workspace">
     <header class="workspace-header">
       <div class="workspace-heading">
-        <button class="icon-button" type="button" aria-label="返回旅行地图" @click="emit('back')">
+        <button class="icon-button" type="button" aria-label="返回发现首页" @click="emit('back')">
           <ArrowLeft :size="19" />
         </button>
         <div>
@@ -438,7 +454,7 @@ function eventLabel(status: string) {
             <div class="field-pair">
               <label class="field"
                 ><span>目的地</span
-                ><select v-model="cityCode">
+                ><select v-model="cityCode" aria-label="目的地">
                   <option v-for="city in cities" :key="city.code" :value="city.code">
                     {{ city.name }}
                   </option>

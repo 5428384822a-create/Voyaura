@@ -29,7 +29,7 @@ api/.venv/Scripts/python.exe scripts/local_serve.py api
 api/.venv/Scripts/python.exe scripts/local_serve.py web
 ```
 
-访问 `http://127.0.0.1:5188`。在本机查看 `.local/access-token.txt`，把令牌填入连接窗口；不要贴到Issue、报告或聊天记录。API为 `http://127.0.0.1:8018`，`/health`为存活检查（不是所有依赖就绪检查），`/docs`提供契约。服务只监听127.0.0.1。停止时在各自终端Ctrl+C，不结束其他任务进程。
+访问 `http://127.0.0.1:5188`，默认进入无需令牌的发现首页。点击“我的”或规划、私人地图、旅行记忆等入口时再连接；在本机查看 `.local/access-token.txt`，把令牌填入连接窗口；不要贴到Issue、报告或聊天记录。API为 `http://127.0.0.1:8018`，`/health`为存活检查（不是所有依赖就绪检查），`/docs`提供契约。服务只监听127.0.0.1。停止时在各自终端Ctrl+C，不结束其他任务进程。
 
 自定义初始端口：`scripts/local_setup.py --api-port 8019 --web-port 5189`；已有profile继续使用原端口，需人工检查后修改，不自动覆盖。Web使用同源 `/api/v1`，启动脚本设置代理目标，无需把API token写入Vite环境。
 
@@ -51,7 +51,7 @@ npm audit --omit=dev
 api/.venv/Scripts/python.exe scripts/verify_e2e.py
 ```
 
-此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机4项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录，JUnit与截图在docs/delivery。
+此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机8项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round1，旧Agent交付证据仍在docs/delivery。
 
 本机已安装Chrome，可直接运行。没有Chrome时，在web运行 `npx playwright install chromium`，再设置 `$env:VOYAURA_E2E_CHANNEL='chromium'` 后执行运行器。Linux可用 `npx playwright install --with-deps chromium`。直接 `npm run test:e2e` 会连接指定的现有本地profile并写测试夹具，团队应优先使用隔离运行器。
 
@@ -64,6 +64,14 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 5. 生产构建的前端使用 `/api/v1`，由同源反向代理将该前缀转发到Uvicorn，其他路径提供web/dist与SPA回退。TLS、秘密管理、备份、角色/会话、限流、worker可靠交付、病毒扫描均须在上线前另行验收；本次没有公开部署。
 
 升级已有数据库前做离线备份并在副本演练。迁移测试已保留0002历史文字、媒体、visit到0014，但不代替真实生产数据库备份或PostgreSQL验收。`.github/workflows/ci.yml` 已配置API/Web/浏览器/Postgres迁移作业，尚未在远程运行。
+
+## 第一轮前端预览与路由
+
+开发服务默认 A 清爽封面；`http://127.0.0.1:5188/?style=immersive` 可查看 B 摄影沉浸封面。该参数只在开发环境生效，生产构建默认 A；两版共用真实交互和照片。离线截图对比可打开 `docs/design/round1/index.html`。
+
+客户端路径为 `/`（发现）、`/plan`（计划）、`/journey/map`（旅程地图）、`/journey/stories`（旅行记忆）、`/studio`（创作）。当前“我的”打开真实本机档案连接窗口，不代表已经实现账户中心。服务须将非文件、非API的路径回退到 `index.html`，例如Nginx `location / { try_files $uri $uri/ /index.html; }`；API代理另行匹配。Vite开发和预览服务支持该回退，其他托管环境尚未部署验收。
+
+发现页旅行想法通过浏览器 history state 带入计划并支持当前历史项刷新，不写入URL；它是临时表单意图，不是已保存行程，清除浏览器历史或另开标签页不保证保留。私人档案保存仍须原有服务端确认。
 
 ## 数据与恢复
 

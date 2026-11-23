@@ -1,0 +1,62 @@
+:root {
+  --product-header-height: 72px;
+  --product-bottom-height: 0px;
+  --page-bg: #faf9f6;
+  --brand-orange: #ed683e;
+  --brand-ink-orange: #c64c2a;
+  --brand-button: #ce4b29;
+  --paper: #faf8f3;
+  --coral: #e5633c;
+  --coral-dark: #c64c2a;
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+body {
+  background: var(--page-bg);
+}
+.app-shell {
+  background: var(--page-bg);
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid #e8754b66;
+  outline-offset: 4px;
+}
+.app-shell > .agent-workspace,
+.app-shell > .map-home,
+.app-shell > .journey-planner-view,
+.app-shell > .image-studio-view,
+.app-shell > .empty-view {
+  inset: var(--product-header-height) 0 var(--product-bottom-height) 0 !important;
+}
+.app-shell > .city-memory-panel {
+  top: var(--product-header-height);
+}
+@media (max-width: 899px) {
+  :root {
+    --product-header-height: 64px;
+    --product-bottom-height: calc(68px + env(safe-area-inset-bottom));
+  }
+  .app-shell > .city-memory-panel {
+    top: auto;
+    bottom: var(--product-bottom-height);
+  }
+  .app-shell > .legacy-route-entry {
+    bottom: calc(var(--product-bottom-height) + 10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

@@ -12,6 +12,7 @@ const apiUrl = process.env.VOYAURA_E2E_API_URL ?? 'http://127.0.0.1:8018/api/v1'
 const headers = { Authorization: `Bearer ${token}` }
 async function login(page: Page) {
   await page.goto('/')
+  await page.getByRole('button', { name: '我的私人档案', exact: true }).click()
   await page.getByLabel('访问令牌', { exact: true }).fill(token)
   await page.getByRole('button', { name: '连接 Voyaura', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -22,7 +23,7 @@ async function post(request: APIRequestContext, path: string, data: object) {
   return response.json()
 }
 function screenshots() {
-  const path = new URL('../../docs/delivery/screenshots/', import.meta.url)
+  const path = new URL('../../docs/design/round1/flow-screenshots/', import.meta.url)
   mkdirSync(path, { recursive: true })
   return path
 }
@@ -35,7 +36,7 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   page.on('pageerror', (e) => errors.push(e.message))
   const before = await (await request.get(`${apiUrl}/map/overview`, { headers })).json()
   await login(page)
-  await page.getByRole('button', { name: '行程', exact: true }).click()
+  await page.getByRole('button', { name: '计划', exact: true }).click()
   await page
     .getByLabel('这次想怎样旅行？', { exact: true })
     .fill('[本地验收输入，非真实旅行] 两天轻松逛博物馆与公园')
@@ -74,7 +75,7 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   const after = await (await request.get(`${apiUrl}/map/overview`, { headers })).json()
   expect(after.stats).toEqual(before.stats)
   await page.reload()
-  await page.getByRole('button', { name: '行程', exact: true }).click()
+  await page.getByRole('button', { name: '计划', exact: true }).click()
   await page.getByRole('button', { name: /最近任务/ }).click()
   await page.locator('.history-strip > button').first().click()
   await expect(page.locator('.saved-card')).toContainText('已妥善收藏')
@@ -89,7 +90,7 @@ test('故事：实际保存测试记录→授权读取→编辑→确认，空�
   request,
 }, testInfo) => {
   await login(page)
-  await page.getByRole('button', { name: '记忆', exact: true }).click()
+  await page.getByRole('button', { name: /^旅行记忆/ }).click()
   await page
     .getByLabel('想留下一段怎样的回忆？', { exact: true })
     .fill('[本地验收输入] 整理测试文字记录')

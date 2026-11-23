@@ -6,7 +6,10 @@ export default defineConfig({
   workers: 1,
   timeout: 45000,
   expect: { timeout: 10000 },
-  reporter: [['list'], ['junit', { outputFile: '../docs/delivery/e2e.xml' }]],
+  reporter: [
+    ['list'],
+    ['junit', { outputFile: process.env.VOYAURA_E2E_REPORT ?? '../docs/design/round1/e2e.xml' }],
+  ],
   outputDir: '../.local/playwright-artifacts',
   use: {
     baseURL: process.env.VOYAURA_E2E_WEB_URL ?? 'http://127.0.0.1:5188',

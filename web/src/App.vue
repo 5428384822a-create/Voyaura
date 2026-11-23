@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { Bell } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { viewPaths } from './router'
+import type { DiscoveryIntent } from './content/discovery'
 import {
   ApiClientError,
   confirmCheckIn,
@@ -31,6 +33,8 @@ import {
   uploadMediaFile,
 } from './api/client'
 import AppNavigation from './components/AppNavigation.vue'
+import ProductHeader from './components/ProductHeader.vue'
+import DiscoverHomeView from './views/DiscoverHomeView.vue'
 import ConnectionPanel from './components/ConnectionPanel.vue'
 import AgentWorkspace from './views/AgentWorkspace.vue'
 import { getAccessToken } from './api/session'
@@ -80,13 +84,30 @@ import ImageStudioView from './views/ImageStudioView.vue'
 import JourneyPlannerView from './views/JourneyPlannerView.vue'
 import MapHomeView from './views/MapHomeView.vue'
 
-const activeView = ref<AppView>('map')
+const route = useRoute()
+const router = useRouter()
+const activeView = computed<AppView>({
+  get: () =>
+    typeof route.name === 'string' && route.name in viewPaths
+      ? (route.name as AppView)
+      : 'discover',
+  set: (view) => {
+    void router.push(viewPaths[view])
+  },
+})
+const previewCover = computed(() =>
+  import.meta.env.DEV && route.query.style === 'immersive' ? 'immersive' : 'city',
+)
 const overview = ref<MapOverview>(emptyOverview)
 const apiConnected = ref(false)
-const connectionOpen = ref(!getAccessToken())
+const connectionOpen = ref(false)
+const pendingView = ref<AppView | null>(null)
+const agentIntent = ref<DiscoveryIntent | null>(window.history.state?.discoveryIntent ?? null)
 const agentCity = ref('440100')
 const routeToolsOpen = ref(false)
-const checkInPhase = ref<'idle' | 'locating' | 'manual' | 'preview' | 'confirming' | 'success' | 'error'>('idle')
+const checkInPhase = ref<
+  'idle' | 'locating' | 'manual' | 'preview' | 'confirming' | 'success' | 'error'
+>('idle')
 const checkInPayload = ref<CheckInCoordinates | ManualCityCheckIn | null>(null)
 const checkInPreview = ref<CheckInPreview | null>(null)
 const checkInError = ref<AppErrorInfo | null>(null)
@@ -116,14 +137,16 @@ const memoryDeleteDraft = ref<CityMemoryDeleteDraft | null>(null)
 const memoryDeletePreview = ref<CityMemoryDeletePreview | null>(null)
 const memoryDeleteError = ref<AppErrorInfo | null>(null)
 const mediaDeleteCity = ref<VisitedCity | null>(null)
-const mediaDeleteTarget = ref<{ memoryId: string, assetId: string } | null>(null)
+const mediaDeleteTarget = ref<{ memoryId: string; assetId: string } | null>(null)
 const mediaDeletePhase = ref<'loading' | 'preview' | 'deleting' | 'success' | 'error'>('loading')
 const mediaDeleteDraft = ref<MediaDeleteDraft | null>(null)
 const mediaDeletePreview = ref<MediaDeletePreview | null>(null)
 const mediaDeleteError = ref<AppErrorInfo | null>(null)
 const mediaUploadCity = ref<VisitedCity | null>(null)
 const mediaUploadMemory = ref<CityMemoryItem | null>(null)
-const mediaUploadPhase = ref<'selecting' | 'preview' | 'uploading' | 'processing' | 'success' | 'error'>('selecting')
+const mediaUploadPhase = ref<
+  'selecting' | 'preview' | 'uploading' | 'processing' | 'success' | 'error'
+>('selecting')
 const mediaUploadFile = ref<File | null>(null)
 const mediaUploadDraft = ref<MediaUploadDraft | null>(null)
 const mediaUploadPreview = ref<MediaUploadPreview | null>(null)
@@ -136,7 +159,9 @@ const imageStyleCity = ref<VisitedCity | null>(null)
 const imageStyleMemory = ref<CityMemoryItem | null>(null)
 const imageStyleAsset = ref<MemoryMediaAsset | null>(null)
 const imageStyleCatalog = ref<ImageStyleCatalog | null>(null)
-const imageStylePhase = ref<'loading' | 'editing' | 'preview' | 'creating' | 'processing' | 'success' | 'error'>('loading')
+const imageStylePhase = ref<
+  'loading' | 'editing' | 'preview' | 'creating' | 'processing' | 'success' | 'error'
+>('loading')
 const imageStyleDraft = ref<ImageJobCreateDraft | null>(null)
 const imageStylePreview = ref<ImageJobPreview | null>(null)
 const imageStyleJob = ref<ImageJob | null>(null)
@@ -148,9 +173,19 @@ const poiSearchError = ref<AppErrorInfo | null>(null)
 let mediaUploadAbortController: AbortController | null = null
 let mediaUploadPollVersion = 0
 let imageStylePollVersion = 0
-const checkInBusy = computed(() => checkInPhase.value === 'locating' || checkInPhase.value === 'confirming')
+const checkInBusy = computed(
+  () => checkInPhase.value === 'locating' || checkInPhase.value === 'confirming',
+)
 
 onMounted(async () => {
+  if (!getAccessToken()) {
+    if (activeView.value !== 'discover') {
+      pendingView.value = activeView.value
+      await router.replace(viewPaths.discover)
+      connectionOpen.value = true
+    }
+    return
+  }
   try {
     overview.value = await getMapOverview()
     apiConnected.value = true
@@ -160,15 +195,59 @@ onMounted(async () => {
 })
 
 function selectView(view: AppView) {
-  if (view === 'profile') { connectionOpen.value = true; return }
+  if (view === 'profile') {
+    connectionOpen.value = true
+    return
+  }
   routeToolsOpen.value = false
+  selectedCity.value = null
+  if (view !== 'discover' && !getAccessToken()) {
+    pendingView.value = view
+    connectionOpen.value = true
+    return
+  }
   activeView.value = view
+}
+
+function startDiscoveryPlan(intent: DiscoveryIntent) {
+  agentIntent.value = intent
+  agentCity.value = intent.cityAdcode ?? '440100'
+  routeToolsOpen.value = false
+  selectedCity.value = null
+  if (!getAccessToken()) {
+    pendingView.value = 'journeys'
+    connectionOpen.value = true
+    return
+  }
+  void router.push({
+    path: viewPaths.journeys,
+    state: { discoveryIntent: JSON.parse(JSON.stringify(intent)) },
+  })
+}
+
+function closeConnection() {
+  connectionOpen.value = false
+  pendingView.value = null
 }
 
 async function onConnected() {
   connectionOpen.value = false
-  try { overview.value = await getMapOverview(); apiConnected.value = true }
-  catch { apiConnected.value = false }
+  try {
+    overview.value = await getMapOverview()
+    apiConnected.value = true
+  } catch {
+    apiConnected.value = false
+  }
+  const next = pendingView.value
+  pendingView.value = null
+  if (next) {
+    if (next === 'journeys' && agentIntent.value)
+      await router.push({
+        path: viewPaths.journeys,
+        state: { discoveryIntent: JSON.parse(JSON.stringify(agentIntent.value)) },
+      })
+    else activeView.value = next
+  }
 }
 
 function reloadDisconnected() {
@@ -219,10 +298,9 @@ function geolocationError(error: GeolocationPositionError): AppErrorInfo {
 }
 
 function isGeolocationError(error: unknown): error is GeolocationPositionError {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && typeof error.code === 'number'
+  return (
+    typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'number'
+  )
 }
 
 function getBrowserPosition(options: PositionOptions): Promise<GeolocationPosition> {
@@ -335,7 +413,11 @@ async function searchManualCity(query: string) {
   try {
     manualResults.value = await searchCities(query)
     if (!manualResults.value.length) {
-      manualError.value = localError('CITY_SEARCH_EMPTY', '没有找到对应城市，请输入完整城市名。', false)
+      manualError.value = localError(
+        'CITY_SEARCH_EMPTY',
+        '没有找到对应城市，请输入完整城市名。',
+        false,
+      )
     }
   } catch (error) {
     const code = error instanceof Error ? error.message : 'AMAP_CITY_SEARCH_FAILED'
@@ -369,9 +451,10 @@ async function confirmCurrentCity() {
 
   checkInPhase.value = 'confirming'
   try {
-    const result = 'coordinate_system' in checkInPayload.value
-      ? await confirmCheckIn(checkInPayload.value)
-      : await confirmManualCheckIn(checkInPayload.value)
+    const result =
+      'coordinate_system' in checkInPayload.value
+        ? await confirmCheckIn(checkInPayload.value)
+        : await confirmManualCheckIn(checkInPayload.value)
     overview.value = await getMapOverview()
     focusPoint.value = [result.city.longitude, result.city.latitude]
     checkInPhase.value = 'success'
@@ -424,13 +507,13 @@ function closeCityMemory() {
 
 function openXiaoxi() {
   selectedCity.value = null
-  activeView.value = 'journeys'
+  selectView('journeys')
 }
 
 function askXiaoxiAboutCity(city: VisitedCity) {
   closeCityMemory()
   agentCity.value = city.adcode
-  activeView.value = 'memories'
+  selectView('memories')
 }
 
 function openMemoryComposer(city: VisitedCity) {
@@ -498,10 +581,7 @@ async function previewMemory(input: NewMemoryInput) {
 async function refreshMemoryViews(adcode: string) {
   overview.value = await getMapOverview()
   if (selectedCity.value?.adcode === adcode) {
-    const [detail, tasks] = await Promise.all([
-      getCityMemories(adcode),
-      getCityMediaTasks(adcode),
-    ])
+    const [detail, tasks] = await Promise.all([getCityMemories(adcode), getCityMediaTasks(adcode)])
     cityMemoryDetail.value = detail
     cityMediaTasks.value = tasks.items
     mediaTaskError.value = null
@@ -511,7 +591,11 @@ async function refreshMemoryViews(adcode: string) {
 
 async function confirmMemory() {
   if (!memoryComposerCity.value || !memoryDraft.value) {
-    memoryError.value = localError('MEMORY_CONTEXT_LOST', '记忆编辑上下文已失效，请重新填写。', false)
+    memoryError.value = localError(
+      'MEMORY_CONTEXT_LOST',
+      '记忆编辑上下文已失效，请重新填写。',
+      false,
+    )
     memoryComposerPhase.value = 'error'
     return
   }
@@ -602,10 +686,7 @@ async function confirmMemoryDelete() {
   }
 }
 
-async function openMediaDelete(
-  memoryId: string,
-  asset: MemoryMediaAsset | MediaTaskItem,
-) {
+async function openMediaDelete(memoryId: string, asset: MemoryMediaAsset | MediaTaskItem) {
   if (!selectedCity.value) return
   const assetId = 'asset_id' in asset ? asset.asset_id : asset.id
   mediaDeleteCity.value = selectedCity.value
@@ -676,11 +757,7 @@ async function retryMediaTask(task: MediaTaskItem) {
     for (let attempt = 0; attempt < 80; attempt += 1) {
       if (selectedCity.value?.adcode !== city.adcode) return
       if (attempt > 0) await wait(1500)
-      const status = await getMediaProcessingStatus(
-        city.adcode,
-        task.memory_id,
-        task.asset_id,
-      )
+      const status = await getMediaProcessingStatus(city.adcode, task.memory_id, task.asset_id)
       if (status.status === 'ready') {
         ready = true
         break
@@ -959,10 +1036,10 @@ async function waitForMediaReady(
 
 async function confirmMediaUpload() {
   if (
-    !mediaUploadCity.value
-    || !mediaUploadMemory.value
-    || !mediaUploadFile.value
-    || !mediaUploadDraft.value
+    !mediaUploadCity.value ||
+    !mediaUploadMemory.value ||
+    !mediaUploadFile.value ||
+    !mediaUploadDraft.value
   ) {
     mediaUploadError.value = localError(
       'MEDIA_UPLOAD_CONTEXT_LOST',
@@ -1044,15 +1121,26 @@ async function confirmMediaUpload() {
 
 <template>
   <div class="app-shell">
-    <aside class="brand-rail">
-      <button class="brand-mark" type="button" title="Voyaura 地图" aria-label="Voyaura 地图" @click="activeView = 'map'">V</button>
-      <AppNavigation :active-view="activeView" @select="selectView" />
-      <button class="notification-button" type="button" title="通知" aria-label="通知"><Bell :size="20" /></button>
-      <button class="avatar" type="button" title="私人档案连接" aria-label="私人档案连接" @click="connectionOpen = true">AR</button>
-    </aside>
+    <ProductHeader
+      :active-view="activeView"
+      :connected="apiConnected"
+      @select="selectView"
+      @connect="connectionOpen = true"
+      @xiaoxi="openXiaoxi"
+    />
+    <DiscoverHomeView
+      v-if="activeView === 'discover'"
+      :connected="apiConnected"
+      :cover="previewCover"
+      :stats="overview.stats"
+      @plan="startDiscoveryPlan"
+      @map="selectView('map')"
+      @stories="selectView('memories')"
+      @connect="connectionOpen = true"
+    />
 
     <MapHomeView
-      v-if="activeView === 'map'"
+      v-else-if="activeView === 'map'"
       :overview="overview"
       :api-connected="apiConnected"
       :focus-point="focusPoint"
@@ -1071,13 +1159,14 @@ async function confirmMediaUpload() {
       v-else-if="activeView === 'journeys' || activeView === 'memories'"
       :initial-kind="activeView === 'memories' ? 'story' : 'plan'"
       :initial-city="agentCity"
-      @back="activeView = 'map'"
+      :initial-intent="activeView === 'journeys' ? agentIntent : null"
+      @back="activeView = 'discover'"
       @connect="connectionOpen = true"
     />
     <ImageStudioView v-else-if="activeView === 'studio'" @back="activeView = 'map'" />
     <EmptyView v-else :view="activeView" @back="activeView = 'map'" />
 
-    <AppNavigation class="mobile-nav" :active-view="activeView" @select="selectView" />
+    <AppNavigation mode="mobile" :active-view="activeView" @select="selectView" />
 
     <Transition name="dialog">
       <CheckInDialog
@@ -1133,9 +1222,20 @@ async function confirmMediaUpload() {
         @style-photo="openImageStyle"
       />
     </Transition>
-    <ConnectionPanel v-if="connectionOpen" @close="connectionOpen = false" @connected="onConnected" @disconnected="reloadDisconnected" />
-    <button v-if="activeView === 'journeys' && !routeToolsOpen" class="legacy-route-entry" type="button" @click="routeToolsOpen = true">城市接驳工具</button>
-
+    <ConnectionPanel
+      v-if="connectionOpen"
+      @close="closeConnection"
+      @connected="onConnected"
+      @disconnected="reloadDisconnected"
+    />
+    <button
+      v-if="activeView === 'journeys' && !routeToolsOpen"
+      class="legacy-route-entry"
+      type="button"
+      @click="routeToolsOpen = true"
+    >
+      城市接驳工具
+    </button>
 
     <Transition name="dialog">
       <MediaUploadDialog
@@ -1214,11 +1314,28 @@ async function confirmMediaUpload() {
         @confirm="confirmMemoryDelete"
       />
     </Transition>
-
-
   </div>
 </template>
 
 <style scoped>
-.legacy-route-entry{position:absolute;right:26px;bottom:14px;z-index:35;padding:6px 10px;border:1px solid #d7dbc9;border-radius:6px;background:#f9f8ef;color:#879174;font-size:10px;cursor:pointer}@media(max-width:760px){.legacy-route-entry{bottom:75px;right:14px;font-size:9px}}
+.legacy-route-entry {
+  position: absolute;
+  right: 26px;
+  bottom: 14px;
+  z-index: 35;
+  padding: 6px 10px;
+  border: 1px solid #d7dbc9;
+  border-radius: 6px;
+  background: #f9f8ef;
+  color: #879174;
+  font-size: 10px;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .legacy-route-entry {
+    bottom: 75px;
+    right: 14px;
+    font-size: 9px;
+  }
+}
 </style>
