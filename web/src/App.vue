@@ -1162,6 +1162,7 @@ async function confirmMediaUpload() {
       :initial-intent="activeView === 'journeys' ? agentIntent : null"
       @back="activeView = 'discover'"
       @connect="connectionOpen = true"
+      @route-tools="routeToolsOpen = true"
     />
     <ImageStudioView v-else-if="activeView === 'studio'" @back="activeView = 'map'" />
     <EmptyView v-else :view="activeView" @back="activeView = 'map'" />
@@ -1228,14 +1229,6 @@ async function confirmMediaUpload() {
       @connected="onConnected"
       @disconnected="reloadDisconnected"
     />
-    <button
-      v-if="activeView === 'journeys' && !routeToolsOpen"
-      class="legacy-route-entry"
-      type="button"
-      @click="routeToolsOpen = true"
-    >
-      城市接驳工具
-    </button>
 
     <Transition name="dialog">
       <MediaUploadDialog
@@ -1316,26 +1309,3 @@ async function confirmMediaUpload() {
     </Transition>
   </div>
 </template>
-
-<style scoped>
-.legacy-route-entry {
-  position: absolute;
-  right: 26px;
-  bottom: 14px;
-  z-index: 35;
-  padding: 6px 10px;
-  border: 1px solid #d7dbc9;
-  border-radius: 6px;
-  background: #f9f8ef;
-  color: #879174;
-  font-size: 10px;
-  cursor: pointer;
-}
-@media (max-width: 760px) {
-  .legacy-route-entry {
-    bottom: 75px;
-    right: 14px;
-    font-size: 9px;
-  }
-}
-</style>

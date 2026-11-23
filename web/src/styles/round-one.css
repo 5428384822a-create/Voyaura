@@ -49,9 +49,6 @@ select:focus-visible {
     top: auto;
     bottom: var(--product-bottom-height);
   }
-  .app-shell > .legacy-route-entry {
-    bottom: calc(var(--product-bottom-height) + 10px);
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,

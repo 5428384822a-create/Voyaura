@@ -17,6 +17,16 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  CalendarDays,
+  ChevronDown,
+  Clock3,
+  ListChecks,
+  Map,
+  Sun,
+  Wallet,
+  SlidersHorizontal,
+  CircleAlert,
+  ArrowUpRight,
 } from 'lucide-vue-next'
 import { ApiClientError } from '../api/client'
 import {
@@ -36,6 +46,8 @@ import type {
   UserCandidate,
 } from '../api/agent'
 import AgentRouteMap from '../components/AgentRouteMap.vue'
+import AgentWorkflowSteps from '../components/AgentWorkflowSteps.vue'
+import { destinations } from '../content/discovery'
 import type { DiscoveryIntent } from '../content/discovery'
 
 const props = defineProps<{
@@ -43,7 +55,7 @@ const props = defineProps<{
   initialCity?: string
   initialIntent?: DiscoveryIntent | null
 }>()
-const emit = defineEmits<{ back: []; connect: [] }>()
+const emit = defineEmits<{ back: []; connect: []; routeTools: [] }>()
 const mode = ref<'plan' | 'story'>(props.initialKind ?? 'plan')
 const cities = [
   { code: '440100', name: '广州市' },
@@ -79,6 +91,16 @@ const candidates = ref<
   >
 >([])
 const capabilities = ref<AgentCapabilities | null>(null)
+const capabilitiesUnavailable = ref(false)
+const mapAvailabilityNote = computed(() =>
+  capabilities.value
+    ? capabilities.value.amap_configured
+      ? ''
+      : '当前服务尚未配置地图查询，可补充已知地点。'
+    : capabilitiesUnavailable.value
+      ? '暂时无法读取服务状态，工具可用性以实际执行结果为准。'
+      : '正在读取工具服务状态。',
+)
 const history = ref<AgentRun[]>([])
 const run = ref<AgentRun | null>(null)
 const activeDay = ref(1)
@@ -93,6 +115,139 @@ const revisedEnd = ref('18:00')
 const pendingRequest = ref<RunCreate | null>(null)
 const showHistory = ref(false)
 const resultAnchor = ref<HTMLElement | null>(null)
+const briefAnchor = ref<HTMLElement | null>(null)
+const confirmationAnchor = ref<HTMLElement | null>(null)
+const candidateDetails = ref<HTMLDetailsElement | null>(null)
+const editingBrief = ref(false)
+const resultTab = ref<'schedule' | 'map' | 'execution'>('schedule')
+const interestOptions = ['自然风光', '历史街区', '博物馆', '美食', '海边', '公园']
+const hasPlan = computed(
+  () =>
+    run.value?.kind === 'plan' &&
+    !['needs_input', 'failed', 'running'].includes(run.value.status) &&
+    !!run.value.result.days?.some((day) => day.stops.length > 0),
+)
+const contextCityCode = computed(() =>
+  hasPlan.value ? String(run.value?.request.city_adcode ?? cityCode.value) : cityCode.value,
+)
+const contextCity = computed(
+  () => cities.find((c) => c.code === contextCityCode.value)?.name ?? '这段旅程',
+)
+const contextPhoto = computed(() => destinations.find((d) => d.adcode === contextCityCode.value))
+const summaryGoal = computed(() =>
+  hasPlan.value ? String(run.value?.request.goal ?? goal.value) : goal.value,
+)
+const summaryDate = computed(() =>
+  hasPlan.value ? String(run.value?.request.start_date ?? '') : startDate.value,
+)
+const summaryDays = computed(() =>
+  hasPlan.value
+    ? Number(run.value?.request.days ?? run.value?.result.days?.length ?? 0)
+    : days.value,
+)
+const placeCount = computed(
+  () => run.value?.result.days?.reduce((total, day) => total + day.stops.length, 0) ?? 0,
+)
+const taskPhase = computed(() => {
+  if (busy.value && pendingRequest.value) return 'working'
+  if (run.value?.status === 'confirmed') return 'saved'
+  if (run.value?.status === 'running') return 'working'
+  if (run.value?.status === 'needs_input' || run.value?.status === 'failed') return 'blocked'
+  if (run.value) return 'review'
+  return 'brief'
+})
+async function onResultTabKeydown(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  const views = ['schedule', 'map', 'execution'] as const
+  const index = views.indexOf(resultTab.value)
+  const next =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? 2
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + views.length) % views.length
+  const tabs = event.currentTarget as HTMLElement
+  event.preventDefault()
+  resultTab.value = views[next]!
+  await nextTick()
+  tabs.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus()
+}
+function scrollTo(element: HTMLElement | null) {
+  element?.scrollIntoView?.({
+    block: 'start',
+    behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      ? 'instant'
+      : 'smooth',
+  })
+}
+async function openBrief() {
+  editingBrief.value = true
+  await nextTick()
+  scrollTo(briefAnchor.value)
+}
+async function openCandidates() {
+  if (hasPlan.value) editingBrief.value = true
+  await nextTick()
+  if (candidateDetails.value) candidateDetails.value.open = true
+  await nextTick()
+  scrollTo(candidateDetails.value)
+}
+function toggleInterest(value: string) {
+  const selected = split(interests.value)
+  interests.value = (
+    selected.includes(value)
+      ? selected.filter((i) => i !== value)
+      : selected.length < 3
+        ? [...selected, value]
+        : selected
+  ).join('，')
+}
+function historyStatus(value: AgentRun['status']) {
+  return {
+    running: '执行中',
+    needs_input: '待补充',
+    awaiting_confirmation: '草案',
+    confirmed: '已保存',
+    failed: '未完成',
+  }[value]
+}
+function checkLabel(value: string) {
+  return (
+    (
+      {
+        pass: '通过',
+        passed: '通过',
+        warning: '待核实',
+        unknown: '未知',
+        fail: '未通过',
+        failed: '未通过',
+      } as Record<string, string>
+    )[value] ?? value
+  )
+}
+function restoreBrief(value: AgentRun) {
+  const q = value.request
+  if (typeof q.goal === 'string') goal.value = q.goal
+  if (typeof q.city_adcode === 'string') cityCode.value = q.city_adcode
+  if (typeof q.start_date === 'string') startDate.value = q.start_date
+  if (typeof q.days === 'number') days.value = q.days
+  budget.value = typeof q.budget_yuan === 'number' ? q.budget_yuan : ''
+  if (typeof q.daily_start === 'string') dailyStart.value = q.daily_start
+  if (typeof q.daily_end === 'string') dailyEnd.value = q.daily_end
+  if (q.transport === 'walking' || q.transport === 'transit' || q.transport === 'driving')
+    transport.value = q.transport
+  if (q.pace === 'relaxed' || q.pace === 'balanced') pace.value = q.pace
+  interests.value = Array.isArray(q.interests)
+    ? q.interests.filter((i) => typeof i === 'string').join('，')
+    : ''
+  mustVisit.value = Array.isArray(q.must_visit)
+    ? q.must_visit.filter((i) => typeof i === 'string').join('，')
+    : ''
+  candidates.value = Array.isArray(q.candidates) ? q.candidates.map((c) => ({ ...c })) : []
+  allowExternal.value = false
+  allowModel.value = false
+  allowMemory.value = false
+}
 const canSave = computed(
   () =>
     run.value?.status === 'awaiting_confirmation' &&
@@ -136,8 +291,10 @@ function useRun(value: AgentRun) {
   editStory.value = value.result.story_body ?? ''
   revisedEnd.value = String(value.request.daily_end ?? '18:00')
   activeDay.value = value.result.days?.[0]?.day ?? 1
+  editingBrief.value = false
+  resultTab.value = 'schedule'
   clearConfirmation()
-  void nextTick(() => resultAnchor.value?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+  void nextTick(() => scrollTo(resultAnchor.value))
 }
 function reportError(e: unknown) {
   error.value = e instanceof Error ? e.message : '暂时无法完成，请稍后重试。'
@@ -153,6 +310,7 @@ async function loadHistory() {
 onMounted(async () => {
   const results = await Promise.allSettled([getAgentCapabilities(), listAgentRuns()])
   if (results[0].status === 'fulfilled') capabilities.value = results[0].value
+  else capabilitiesUnavailable.value = true
   if (results[1].status === 'fulfilled') history.value = results[1].value.items
   else reportError(results[1].reason)
 })
@@ -261,6 +419,8 @@ async function submit(retry = false) {
   errorCode.value = ''
   clearConfirmation()
   try {
+    await nextTick()
+    scrollTo(resultAnchor.value)
     useRun(await createAgentRun(payload))
     pendingRequest.value = null
     await loadHistory()
@@ -278,6 +438,7 @@ async function restore(id: string) {
     mode.value = value.kind
     await Promise.resolve()
     useRun(value)
+    restoreBrief(value)
     showHistory.value = false
   } catch (e) {
     reportError(e)
@@ -331,6 +492,9 @@ async function previewSave() {
   try {
     confirmation.value = await previewAgentConfirmation(run.value)
     acknowledged.value = false
+    await nextTick()
+    scrollTo(confirmationAnchor.value)
+    confirmationAnchor.value?.focus({ preventScroll: true })
   } catch (e) {
     reportError(e)
   } finally {
@@ -370,1638 +534,1102 @@ function eventLabel(status: string) {
 </script>
 
 <template>
-  <main class="agent-workspace">
-    <header class="workspace-header">
-      <div class="workspace-heading">
-        <button class="icon-button" type="button" aria-label="返回发现首页" @click="emit('back')">
-          <ArrowLeft :size="19" />
-        </button>
-        <div>
-          <p class="eyebrow">VOYAURA · WITH XIAOXI</p>
-          <h1>小曦旅行手记</h1>
-        </div>
-      </div>
-      <div class="workspace-header-actions">
-        <span class="private-badge"><ShieldCheck :size="15" />私人档案</span
-        ><button class="text-button" type="button" @click="showHistory = !showHistory">
-          <History :size="17" />最近任务 <span>{{ history.length }}</span>
-        </button>
-      </div>
-    </header>
+  <main
+    class="agent-workspace"
+    :class="{ 'showing-plan': hasPlan }"
+    aria-label="小曦旅行规划工作台"
+  >
     <div class="workspace-scroll">
-      <div v-if="showHistory" class="history-strip">
-        <div>
-          <strong>接着上次的旅程</strong
-          ><button type="button" class="text-button" @click="loadHistory">
-            <RefreshCw :size="14" />刷新
-          </button>
-        </div>
-        <p v-if="!history.length">还没有任务。第一段旅程，从下面开始。</p>
-        <button
-          v-for="item in history"
-          :key="item.id"
-          type="button"
-          :disabled="busy"
-          @click="restore(item.id)"
-        >
-          <span>{{ item.kind === 'plan' ? '行程' : '故事' }} · {{ item.title }}</span
-          ><small
-            >{{ item.status === 'confirmed' ? '已保存' : '草稿' }} · 第{{ item.revision }}版</small
-          ><ChevronRight :size="16" />
-        </button>
-      </div>
-      <div class="workspace-grid">
-        <aside class="brief-column">
-          <div class="brief-intro">
-            <span class="companion-seal"><Sparkles :size="22" /></span>
-            <p class="eyebrow">PLAN THE JOURNEY. SHAPE THE STORY.</p>
-            <h2>
-              {{
-                mode === 'plan' ? '想去的地方，\n一起慢慢安排。' : '走过的旅途，\n值得好好记住。'
-              }}
-            </h2>
-            <p>
-              {{
-                mode === 'plan'
-                  ? '你说想法，我整理地点、每天的节奏和需要核实的细节。'
-                  : '从你留下的日期、文字和影像数量出发，整理成可编辑的旅行故事。'
-              }}
-            </p>
+      <div class="workspace-container">
+        <header class="workspace-header">
+          <div class="workspace-heading">
+            <button
+              class="icon-button back-button"
+              type="button"
+              aria-label="返回发现首页"
+              @click="emit('back')"
+            >
+              <ArrowLeft :size="19" />
+            </button>
+            <div>
+              <p class="eyebrow">
+                {{ mode === 'plan' ? 'MAKE ROOM FOR THE JOURNEY' : 'KEEP THE MOMENTS CLOSE' }}
+              </p>
+              <h1>{{ mode === 'plan' ? '把心动，安排成旅程。' : '小曦旅行手记' }}</h1>
+            </div>
           </div>
-          <div class="mode-switch" role="group" aria-label="任务类型">
-            <button :class="{ active: mode === 'plan' }" type="button" @click="mode = 'plan'">
-              <Compass :size="16" />规划旅程</button
-            ><button :class="{ active: mode === 'story' }" type="button" @click="mode = 'story'">
-              <BookOpen :size="16" />整理故事
+          <div class="workspace-header-actions">
+            <span class="private-badge"><ShieldCheck :size="15" />私人档案</span>
+            <button
+              class="history-toggle secondary-action"
+              type="button"
+              aria-label="最近任务"
+              :aria-expanded="showHistory"
+              :disabled="busy"
+              @click="showHistory = !showHistory"
+            >
+              <History :size="16" /><span>最近任务</span><b>{{ history.length }}</b>
             </button>
           </div>
-          <form class="travel-brief" @submit.prevent="submit(false)">
-            <label class="field"
-              ><span>{{ mode === 'plan' ? '这次想怎样旅行？' : '想留下一段怎样的回忆？' }}</span
-              ><textarea
-                v-model="goal"
-                required
-                minlength="2"
-                maxlength="1500"
-                rows="3"
-                :placeholder="
-                  mode === 'plan'
-                    ? '想轻松逛两天，喜欢博物馆和街巷，下午留点时间休息…'
-                    : '把这几天的旅行日记整理成一段故事，保留当时写下的细节…'
-                "
-              ></textarea>
-            </label>
-            <div class="field-pair">
-              <label class="field"
-                ><span>目的地</span
-                ><select v-model="cityCode" aria-label="目的地">
-                  <option v-for="city in cities" :key="city.code" :value="city.code">
-                    {{ city.name }}
-                  </option>
-                  <option v-if="!cities.some((c) => c.code === cityCode)" :value="cityCode">
-                    城市 {{ cityCode }}
-                  </option>
-                </select></label
-              ><label class="field"
-                ><span>{{ mode === 'plan' ? '出发日期' : '回忆开始日期' }}</span
-                ><input v-model="startDate" type="date" required
-              /></label>
+        </header>
+        <div v-if="mode === 'plan'" class="workflow-bar">
+          <AgentWorkflowSteps :phase="taskPhase" /><span class="workflow-note"
+            ><Sun :size="14" />和小曦，一步一步来</span
+          >
+        </div>
+        <section v-if="showHistory" class="history-strip" aria-label="最近任务">
+          <div>
+            <div>
+              <p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p>
+              <h2>接着上次的旅程</h2>
             </div>
-            <div class="field-pair">
-              <label class="field"
-                ><span>{{ mode === 'plan' ? '旅行天数' : '回忆时间范围' }}</span
-                ><select v-model.number="days">
-                  <option v-for="n in 4" :key="n" :value="n">{{ n }} 天</option>
-                </select></label
-              ><label v-if="mode === 'plan'" class="field"
-                ><span>景点预算 / 元</span
-                ><input v-model="budget" type="number" min="0" max="1000000" placeholder="暂不限定"
-              /></label>
-            </div>
-            <template v-if="mode === 'plan'">
-              <div class="field-pair">
-                <label class="field"
-                  ><span>每天开始</span><input v-model="dailyStart" type="time" required /></label
-                ><label class="field"
-                  ><span>每天结束</span><input v-model="dailyEnd" type="time" required
-                /></label>
+            <button class="text-button" type="button" :disabled="busy" @click="loadHistory">
+              <RefreshCw :size="14" />刷新
+            </button>
+          </div>
+          <p v-if="!history.length">还没有任务。第一段旅程，从下面开始。</p>
+          <button
+            v-for="item in history"
+            :key="item.id"
+            type="button"
+            :disabled="busy"
+            @click="restore(item.id)"
+          >
+            <span class="history-kind"
+              ><Compass v-if="item.kind === 'plan'" :size="17" /><BookOpen
+                v-else
+                :size="17" /></span
+            ><span>{{ item.title }}</span
+            ><small>{{ historyStatus(item.status) }} · 第{{ item.revision }}版</small
+            ><ChevronRight :size="16" />
+          </button>
+        </section>
+        <div
+          class="workspace-grid"
+          :class="{ 'has-plan': hasPlan, 'has-run': !!run, 'editing-brief': editingBrief }"
+        >
+          <aside class="brief-column">
+            <section
+              v-if="hasPlan && !editingBrief"
+              class="journey-brief-card"
+              aria-label="本次旅行条件"
+            >
+              <div class="journey-cover" :class="{ 'without-photo': !contextPhoto }">
+                <img
+                  v-if="contextPhoto"
+                  :src="contextPhoto.image"
+                  :alt="contextPhoto.imageAlt"
+                /><MapPin v-else :size="42" /><span
+                  >这一站，{{ contextCity.replace(/市$/, '') }}</span
+                ><small v-if="contextPhoto">目的地灵感图</small>
               </div>
-              <div class="field-pair">
-                <label class="field"
-                  ><span>出行方式</span
-                  ><select v-model="transport">
-                    <option value="transit">公交 / 地铁</option>
-                    <option value="walking">步行</option>
-                    <option value="driving">驾车</option>
-                  </select></label
-                ><label class="field"
-                  ><span>旅行节奏</span
-                  ><select v-model="pace">
-                    <option value="relaxed">慢一点，留些空白</option>
-                    <option value="balanced">均衡安排</option>
-                  </select></label
+              <div class="journey-brief-body">
+                <p class="eyebrow">YOUR TRAVEL BRIEF</p>
+                <h2>{{ summaryDays }} 天，按你的节奏。</h2>
+                <p class="journey-goal">{{ summaryGoal }}</p>
+                <dl>
+                  <div>
+                    <dt><CalendarDays :size="14" />出发</dt>
+                    <dd>{{ summaryDate || '日期待补充' }}</dd>
+                  </div>
+                  <div>
+                    <dt><MapPin :size="14" />安排</dt>
+                    <dd>{{ placeCount }} 个地点</dd>
+                  </div>
+                  <div>
+                    <dt><Clock3 :size="14" />每天</dt>
+                    <dd>
+                      {{ run?.request.daily_start ?? '待补充' }} —
+                      {{ run?.request.daily_end ?? '待补充' }}
+                    </dd>
+                  </div>
+                </dl>
+                <button class="secondary-action" type="button" :disabled="busy" @click="openBrief">
+                  <SlidersHorizontal :size="15" />调整旅行条件
+                </button>
+                <p class="summary-hint">调整条件后可以生成一份新草案。</p>
+              </div>
+            </section>
+            <div v-show="!hasPlan || editingBrief" ref="briefAnchor" class="brief-editor">
+              <button
+                v-if="hasPlan && editingBrief"
+                class="text-button editor-back"
+                type="button"
+                :disabled="busy"
+                @click="editingBrief = false"
+              >
+                <ArrowLeft :size="14" />返回当前草案
+              </button>
+              <div class="mode-switch" role="group" aria-label="任务类型">
+                <button
+                  :class="{ active: mode === 'plan' }"
+                  :aria-pressed="mode === 'plan'"
+                  type="button"
+                  :disabled="busy"
+                  @click="mode = 'plan'"
                 >
+                  <Compass :size="16" />规划旅程</button
+                ><button
+                  :class="{ active: mode === 'story' }"
+                  :aria-pressed="mode === 'story'"
+                  type="button"
+                  :disabled="busy"
+                  @click="mode = 'story'"
+                >
+                  <BookOpen :size="16" />整理故事
+                </button>
               </div>
-              <label class="field"
-                ><span>想逛什么 <small>最多3项，逗号分隔</small></span
-                ><input v-model="interests" maxlength="240" placeholder="博物馆，公园，历史街区"
-              /></label>
-              <label class="field"
-                ><span>一定想去 <small>可选，最多3项</small></span
-                ><input v-model="mustVisit" maxlength="240" placeholder="填写具体地点名称"
-              /></label>
-              <details class="candidate-input" :open="!capabilities?.amap_configured">
-                <summary>
-                  <MapPin :size="15" />我已有想去的地点 <span>{{ candidates.length }}</span>
-                </summary>
-                <p>可填你掌握的地点与GCJ-02坐标。系统会注明“你提供”，未经地图核验。</p>
-                <fieldset v-for="(candidate, index) in candidates" :key="index">
-                  <legend>地点 {{ index + 1 }}</legend>
-                  <button
-                    class="remove-candidate"
-                    type="button"
-                    :aria-label="`移除地点${index + 1}`"
-                    @click="candidates.splice(index, 1)"
-                  >
-                    <Trash2 :size="14" /></button
-                  ><label class="field"
-                    ><span>地点名称</span
-                    ><input
-                      v-model="candidate.name"
-                      required
-                      maxlength="100"
-                      placeholder="填写真实地点名称"
-                  /></label>
-                  <div class="field-pair">
-                    <label class="field"
-                      ><span>GCJ-02经度</span
-                      ><input
-                        v-model.number="candidate.longitude"
-                        type="number"
+              <form class="travel-brief" :aria-busy="busy" @submit.prevent="submit(false)">
+                <fieldset class="brief-fields" :disabled="busy">
+                  <section class="brief-card wish-card" aria-labelledby="wish-title">
+                    <header class="brief-card-heading">
+                      <span class="section-number">01</span>
+                      <div>
+                        <h2 id="wish-title">
+                          {{ mode === 'plan' ? '先说说，你想怎样出发' : '想留下一段怎样的回忆' }}
+                        </h2>
+                        <p>
+                          {{
+                            mode === 'plan'
+                              ? '不用写得很完整，一个想法就可以开始。'
+                              : '保留你在旅途中亲自写下的细节。'
+                          }}
+                        </p>
+                      </div>
+                      <Sparkles :size="19" />
+                    </header>
+                    <label class="field goal-field"
+                      ><span>{{
+                        mode === 'plan' ? '这次想怎样旅行？' : '想留下一段怎样的回忆？'
+                      }}</span
+                      ><textarea
+                        v-model="goal"
                         required
-                        step="any"
-                        min="73"
-                        max="136" /></label
-                    ><label class="field"
-                      ><span>GCJ-02纬度</span
-                      ><input
-                        v-model.number="candidate.latitude"
-                        type="number"
-                        required
-                        step="any"
-                        min="3"
-                        max="54"
-                    /></label>
-                  </div>
-                  <div class="field-pair">
-                    <label class="field"
-                      ><span>停留 / 分钟</span
-                      ><input
-                        v-model.number="candidate.stay_minutes"
-                        type="number"
-                        min="15"
-                        max="480"
-                        required /></label
-                    ><label class="field"
-                      ><span>已知票价 / 元</span
-                      ><input
-                        v-model="candidate.cost_yuan"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="未知"
-                        @change="
-                          candidate.cost_yuan =
-                            candidate.cost_yuan === null || String(candidate.cost_yuan) === ''
-                              ? null
-                              : Number(candidate.cost_yuan)
+                        minlength="2"
+                        maxlength="1500"
+                        rows="3"
+                        :aria-label="
+                          mode === 'plan' ? '这次想怎样旅行？' : '想留下一段怎样的回忆？'
                         "
-                    /></label>
-                  </div>
-                  <div class="field-pair">
-                    <label class="field"
-                      ><span>开放时间（可选）</span
-                      ><input
-                        v-model="candidate.opening_start"
-                        type="time"
-                        @change="candidate.opening_start ||= null" /></label
-                    ><label class="field"
-                      ><span>闭馆时间（可选）</span
-                      ><input
-                        v-model="candidate.opening_end"
-                        type="time"
-                        @change="candidate.opening_end ||= null"
-                    /></label>
-                  </div>
-                  <label class="consent compact"
-                    ><input v-model="candidate.must_visit" type="checkbox" /><span
-                      >这是必去地点</span
+                        :placeholder="
+                          mode === 'plan'
+                            ? '想去厦门走走老街、看看海，下午留点时间发呆，行程不要太赶…'
+                            : '把这几天的旅行日记整理成一段故事，保留当时写下的细节…'
+                        "
+                      ></textarea>
+                    </label>
+                  </section>
+                  <section class="brief-card" aria-labelledby="basic-title">
+                    <header class="brief-card-heading">
+                      <span class="section-number">02</span>
+                      <div>
+                        <h2 id="basic-title">
+                          {{ mode === 'plan' ? '把时间和目的地定下来' : '选好这一段回忆' }}
+                        </h2>
+                        <p>
+                          {{
+                            mode === 'plan'
+                              ? '先确定大致安排，细节可以慢慢调整。'
+                              : '仅整理所选城市、日期范围内的记录。'
+                          }}
+                        </p>
+                      </div>
+                    </header>
+                    <div class="basic-fields">
+                      <label class="field"
+                        ><span><MapPin :size="14" />目的地</span
+                        ><select v-model="cityCode" aria-label="目的地">
+                          <option v-for="city in cities" :key="city.code" :value="city.code">
+                            {{ city.name }}
+                          </option>
+                          <option v-if="!cities.some((c) => c.code === cityCode)" :value="cityCode">
+                            城市 {{ cityCode }}
+                          </option>
+                        </select></label
+                      ><label class="field"
+                        ><span
+                          ><CalendarDays :size="14" />{{
+                            mode === 'plan' ? '出发日期' : '回忆开始日期'
+                          }}</span
+                        ><input
+                          v-model="startDate"
+                          type="date"
+                          required
+                          :aria-label="mode === 'plan' ? '出发日期' : '回忆开始日期'" /></label
+                      ><label class="field"
+                        ><span
+                          ><Clock3 :size="14" />{{
+                            mode === 'plan' ? '旅行天数' : '回忆时间范围'
+                          }}</span
+                        ><select
+                          v-model.number="days"
+                          :aria-label="mode === 'plan' ? '旅行天数' : '回忆时间范围'"
+                        >
+                          <option v-for="n in 4" :key="n" :value="n">{{ n }} 天</option>
+                        </select></label
+                      ><label v-if="mode === 'plan'" class="field"
+                        ><span><Wallet :size="14" />景点预算 / 元</span
+                        ><input
+                          v-model="budget"
+                          type="number"
+                          min="0"
+                          max="1000000"
+                          placeholder="暂不限定"
+                          aria-label="景点预算 / 元"
+                      /></label>
+                    </div>
+                    <p v-if="mode === 'plan'" class="field-note">
+                      预算只核对已知景点费用，住宿、餐饮与交通另行安排。
+                    </p>
+                  </section>
+                  <template v-if="mode === 'plan'">
+                    <section
+                      class="brief-card preferences-card"
+                      aria-labelledby="preferences-title"
+                    >
+                      <header class="brief-card-heading">
+                        <span class="section-number">03</span>
+                        <div>
+                          <h2 id="preferences-title">留一点，属于你的偏好</h2>
+                          <p>走快一点、慢一点，都由你决定。</p>
+                        </div>
+                      </header>
+                      <div class="field-pair">
+                        <label class="field"
+                          ><span>出行方式</span
+                          ><select v-model="transport" aria-label="出行方式">
+                            <option value="transit">公交 / 地铁</option>
+                            <option value="walking">步行</option>
+                            <option value="driving">驾车</option>
+                          </select></label
+                        ><label class="field"
+                          ><span>旅行节奏</span
+                          ><select v-model="pace" aria-label="旅行节奏">
+                            <option value="relaxed">慢一点，留些空白</option>
+                            <option value="balanced">均衡安排</option>
+                          </select></label
+                        >
+                      </div>
+                      <label class="field interest-field"
+                        ><span>想逛什么 <small>最多 3 项，逗号分隔</small></span
+                        ><input
+                          v-model="interests"
+                          maxlength="240"
+                          placeholder="博物馆，公园，历史街区"
+                          aria-label="想逛什么"
+                      /></label>
+                      <div class="interest-options" role="group" aria-label="旅行兴趣">
+                        <button
+                          v-for="item in interestOptions"
+                          :key="item"
+                          type="button"
+                          :aria-pressed="split(interests).includes(item)"
+                          :class="{ selected: split(interests).includes(item) }"
+                          :disabled="
+                            split(interests).length >= 3 && !split(interests).includes(item)
+                          "
+                          @click="toggleInterest(item)"
+                        >
+                          <Check v-if="split(interests).includes(item)" :size="12" />{{ item }}
+                        </button>
+                      </div>
+                      <details class="advanced-brief">
+                        <summary>
+                          <SlidersHorizontal :size="14" /><span>更细的安排</span
+                          ><small>{{ dailyStart }} — {{ dailyEnd }}</small
+                          ><ChevronDown :size="15" />
+                        </summary>
+                        <div class="advanced-fields">
+                          <div class="field-pair">
+                            <label class="field"
+                              ><span>每天开始</span
+                              ><input
+                                v-model="dailyStart"
+                                type="time"
+                                required
+                                aria-label="每天开始" /></label
+                            ><label class="field"
+                              ><span>每天结束</span
+                              ><input v-model="dailyEnd" type="time" required aria-label="每天结束"
+                            /></label>
+                          </div>
+                          <label class="field"
+                            ><span>一定想去 <small>可选，最多 3 项</small></span
+                            ><input
+                              v-model="mustVisit"
+                              maxlength="240"
+                              placeholder="填写具体地点名称"
+                              aria-label="一定想去"
+                          /></label>
+                        </div>
+                      </details>
+                    </section>
+                    <section class="brief-card places-card">
+                      <details
+                        ref="candidateDetails"
+                        class="candidate-input"
+                        :open="candidates.length > 0"
+                      >
+                        <summary>
+                          <span class="candidate-symbol"><MapPin :size="18" /></span
+                          ><span
+                            ><strong>我已有想去的地点</strong
+                            ><small>{{
+                              candidates.length
+                                ? `已补充 ${candidates.length} 个地点`
+                                : '有确定的地点？一起带进行程里。'
+                            }}</small></span
+                          ><ChevronDown :size="16" />
+                        </summary>
+                        <div class="candidate-content">
+                          <p>填写你掌握的地点与 GCJ-02 坐标。系统会标注“你提供”，未经地图核验。</p>
+                          <fieldset v-for="(candidate, index) in candidates" :key="index">
+                            <legend>地点 {{ index + 1 }}</legend>
+                            <button
+                              class="remove-candidate icon-button"
+                              type="button"
+                              :aria-label="`移除地点${index + 1}`"
+                              @click="candidates.splice(index, 1)"
+                            >
+                              <Trash2 :size="15" /></button
+                            ><label class="field"
+                              ><span>地点名称</span
+                              ><input
+                                v-model="candidate.name"
+                                required
+                                maxlength="100"
+                                placeholder="填写真实地点名称"
+                                aria-label="地点名称"
+                            /></label>
+                            <div class="field-pair">
+                              <label class="field"
+                                ><span>GCJ-02经度</span
+                                ><input
+                                  v-model.number="candidate.longitude"
+                                  type="number"
+                                  required
+                                  step="any"
+                                  min="73"
+                                  max="136"
+                                  aria-label="GCJ-02经度" /></label
+                              ><label class="field"
+                                ><span>GCJ-02纬度</span
+                                ><input
+                                  v-model.number="candidate.latitude"
+                                  type="number"
+                                  required
+                                  step="any"
+                                  min="3"
+                                  max="54"
+                                  aria-label="GCJ-02纬度"
+                              /></label>
+                            </div>
+                            <div class="field-pair">
+                              <label class="field"
+                                ><span>停留 / 分钟</span
+                                ><input
+                                  v-model.number="candidate.stay_minutes"
+                                  type="number"
+                                  min="15"
+                                  max="480"
+                                  required
+                                  aria-label="停留 / 分钟" /></label
+                              ><label class="field"
+                                ><span>已知票价 / 元</span
+                                ><input
+                                  v-model="candidate.cost_yuan"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="未知"
+                                  aria-label="已知票价 / 元"
+                                  @change="
+                                    candidate.cost_yuan =
+                                      candidate.cost_yuan === null ||
+                                      String(candidate.cost_yuan) === ''
+                                        ? null
+                                        : Number(candidate.cost_yuan)
+                                  "
+                              /></label>
+                            </div>
+                            <div class="field-pair">
+                              <label class="field"
+                                ><span>开放时间（可选）</span
+                                ><input
+                                  v-model="candidate.opening_start"
+                                  type="time"
+                                  aria-label="开放时间（可选）"
+                                  @change="candidate.opening_start ||= null" /></label
+                              ><label class="field"
+                                ><span>闭馆时间（可选）</span
+                                ><input
+                                  v-model="candidate.opening_end"
+                                  type="time"
+                                  aria-label="闭馆时间（可选）"
+                                  @change="candidate.opening_end ||= null"
+                              /></label>
+                            </div>
+                            <label class="consent compact"
+                              ><input v-model="candidate.must_visit" type="checkbox" /><span
+                                >这是必去地点</span
+                              ></label
+                            >
+                          </fieldset>
+                          <button
+                            class="secondary-action add-place"
+                            type="button"
+                            :disabled="candidates.length >= 12"
+                            @click="addCandidate"
+                          >
+                            <Plus :size="15" />添加地点
+                          </button>
+                        </div>
+                      </details>
+                    </section>
+                    <section class="brief-card permission-card" aria-label="本次工具授权">
+                      <div class="permission-heading">
+                        <ShieldCheck :size="17" />
+                        <h2>工具使用，由你决定</h2>
+                      </div>
+                      <label class="consent"
+                        ><input v-model="allowExternal" type="checkbox" /><span
+                          >允许查询高德地点与路线<small
+                            >会向高德发送目的地、地点和出行方式，可能消耗服务额度。{{
+                              mapAvailabilityNote
+                            }}</small
+                          ></span
+                        ></label
+                      ><label v-if="capabilities?.model_configured" class="consent"
+                        ><input
+                          v-model="allowModel"
+                          type="checkbox"
+                          :disabled="!allowExternal"
+                        /><span
+                          >允许模型辅助理解本次需求<small
+                            >只发送当前旅行需求，可能产生模型费用；不发送私人记忆。</small
+                          ></span
+                        ></label
+                      >
+                    </section>
+                  </template>
+                  <label v-else class="consent story-consent"
+                    ><input v-model="allowMemory" type="checkbox" required /><span
+                      >允许读取所选城市与日期的私人记录<small
+                        >仅在本服务内整理文字、日期和可用影像数量；不读取照片内容、不向外部传输。</small
+                      ></span
                     ></label
                   >
+                  <div class="brief-submit">
+                    <button class="primary-action" type="submit" :disabled="busy">
+                      <LoaderCircle v-if="busy" class="spin" :size="18" /><Sparkles
+                        v-else
+                        :size="18"
+                      />{{
+                        busy
+                          ? '小曦正在整理…'
+                          : mode === 'plan'
+                            ? '一起安排这段旅程'
+                            : '整理我的旅行故事'
+                      }}<ArrowRight v-if="!busy" :size="17" />
+                    </button>
+                    <p class="brief-footnote">
+                      <ShieldCheck :size="12" />先生成草案，确认后才存入私人档案。
+                    </p>
+                  </div>
                 </fieldset>
-                <button
+              </form>
+            </div>
+            <button
+              v-if="mode === 'plan'"
+              class="route-tools-entry text-button"
+              type="button"
+              :disabled="busy"
+              @click="emit('routeTools')"
+            >
+              <Route :size="14" />城市接驳工具<ArrowUpRight :size="13" />
+            </button>
+          </aside>
+          <section
+            ref="resultAnchor"
+            class="result-column"
+            aria-live="polite"
+            aria-label="小曦执行结果"
+            :aria-busy="busy"
+          >
+            <div v-if="error" class="workspace-error" role="alert">
+              <CircleAlert :size="20" />
+              <div>
+                <strong>{{ error }}</strong
+                ><small v-if="errorCode">{{ errorCode }}</small
+                ><button
+                  v-if="errorCode.includes('AUTH') || errorCode === 'HTTP_401'"
                   class="text-button"
                   type="button"
-                  :disabled="candidates.length >= 12"
-                  @click="addCandidate"
+                  @click="emit('connect')"
                 >
-                  <Plus :size="15" />添加地点
-                </button>
-              </details>
-              <label class="consent"
-                ><input v-model="allowExternal" type="checkbox" /><span
-                  >允许查询高德地点与路线<small
-                    >会向高德发送目的地、地点和出行方式，可能消耗服务额度。{{
-                      capabilities?.amap_configured ? '' : '当前服务尚未配置地图查询。'
-                    }}</small
-                  ></span
-                ></label
-              >
-              <label v-if="capabilities?.model_configured" class="consent"
-                ><input v-model="allowModel" type="checkbox" :disabled="!allowExternal" /><span
-                  >允许模型辅助理解本次需求<small
-                    >只发送当前旅行需求，可能产生模型费用；不发送私人记忆。</small
-                  ></span
-                ></label
-              >
-            </template>
-            <label v-else class="consent"
-              ><input v-model="allowMemory" type="checkbox" required /><span
-                >允许读取所选城市与日期的私人记录<small
-                  >仅在本服务内整理文字、日期和可用影像数量；不读取照片内容、不向外部传输。</small
-                ></span
-              ></label
-            >
-            <button class="primary-action" type="submit" :disabled="busy">
-              <LoaderCircle v-if="busy" class="spin" :size="18" /><Sparkles v-else :size="18" />{{
-                busy ? '小曦正在整理…' : mode === 'plan' ? '一起安排这段旅程' : '整理我的旅行故事'
-              }}<ArrowRight v-if="!busy" :size="17" />
-            </button>
-            <p class="brief-footnote">
-              所有结果先成为草案，确认后才保存。不会自动购买、公开发布或点亮城市。
-            </p>
-          </form>
-        </aside>
-        <section
-          ref="resultAnchor"
-          class="result-column"
-          aria-live="polite"
-          aria-label="小曦执行结果"
-        >
-          <div v-if="error" class="workspace-error" role="alert">
-            <strong>{{ error }}</strong
-            ><small v-if="errorCode">{{ errorCode }}</small
-            ><button
-              v-if="errorCode.includes('AUTH') || errorCode === 'HTTP_401'"
-              class="text-button"
-              type="button"
-              @click="emit('connect')"
-            >
-              连接私人档案</button
-            ><button
-              v-else-if="pendingRequest"
-              class="text-button"
-              type="button"
-              :disabled="busy"
-              @click="submit(true)"
-            >
-              重试同一任务
-            </button>
-          </div>
-          <div v-if="busy && !run" class="result-empty">
-            <LoaderCircle class="spin" :size="36" />
-            <h2>把想法，慢慢落到地图上。</h2>
-            <p>正在核对输入、执行已授权工具并检查约束。结果与调用记录会一起保留。</p>
-          </div>
-          <div v-else-if="!run" class="result-empty">
-            <div class="empty-atlas">
-              <Compass :size="64" :stroke-width="1" /><span>YOUR NEXT CHAPTER</span>
-            </div>
-            <p class="eyebrow">TRAVEL WITH INTENTION</p>
-            <h2>旅途有方向，<br />也有属于你的留白。</h2>
-            <p>写下愿望，补上已知地点。小曦会把每天的安排、信息来源与尚待核实的地方放在一起。</p>
-            <div class="promise-row">
-              <span><Route :size="17" />可编辑日程</span
-              ><span><ShieldCheck :size="17" />来源可追溯</span
-              ><span><Check :size="17" />由你确认</span>
-            </div>
-          </div>
-          <template v-else>
-            <header class="result-heading">
-              <div>
-                <p class="eyebrow">
-                  {{ run.kind === 'plan' ? 'YOUR JOURNEY, IN THE MAKING' : 'YOUR TRAVEL STORY' }}
-                </p>
-                <h2>{{ run.title }}</h2>
-              </div>
-              <span class="revision-label">版本 {{ run.revision }}</span>
-            </header>
-            <div class="result-status" :class="run.result.verification_status">
-              <CircleCheck :size="18" /><strong>{{ statusText }}</strong
-              ><span>{{
-                run.result.intent_source === 'deepseek' ? '模型辅助理解' : '本地规则整理'
-              }}</span>
-            </div>
-            <p class="result-summary">{{ run.result.summary }}</p>
-            <button
-              v-if="run.status === 'running'"
-              class="secondary-action"
-              type="button"
-              :disabled="busy"
-              @click="restore(run.id)"
-            >
-              <RefreshCw :size="15" />刷新任务状态
-            </button>
-            <template v-if="run.kind === 'plan' && run.result.days?.length">
-              <AgentRouteMap
-                :days="run.result.days"
-                :active-day="activeDay"
-                :allow-external="run.request.allow_external === true"
-              />
-              <div class="day-tabs" role="group" aria-label="每日行程">
-                <button
-                  v-for="day in run.result.days"
-                  :key="day.day"
-                  type="button"
-                  :class="{ active: activeDay === day.day }"
-                  :aria-pressed="activeDay === day.day"
-                  @click="activeDay = day.day"
-                >
-                  <small>DAY {{ String(day.day).padStart(2, '0') }}</small
-                  ><strong>{{ day.date.slice(5).replace('-', ' / ') }}</strong
-                  ><span>{{ day.stops.length }} 个地点</span>
-                </button>
-              </div>
-              <ol v-if="currentDay" class="day-timeline">
-                <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
-                  <div class="stop-time">
-                    <strong>{{ stop.arrival }}</strong
-                    ><small>{{ stop.departure }}</small>
-                  </div>
-                  <span class="stop-dot">{{ index + 1 }}</span>
-                  <article>
-                    <div>
-                      <h3>{{ stop.name }}</h3>
-                      <button
-                        v-if="run.status !== 'confirmed'"
-                        class="text-button"
-                        type="button"
-                        :disabled="busy"
-                        :aria-label="`从草案移除${stop.name}`"
-                        @click="editDraft(stop.candidate_id)"
-                      >
-                        移除
-                      </button>
-                    </div>
-                    <p>
-                      <span>{{ sourceLabel(stop.source) }}</span> · 停留
-                      {{ stop.stay_minutes }} 分钟
-                    </p>
-                    <small v-if="stop.timing_basis === 'planning_buffer'"
-                      >时间含规划预留，交通尚需核实</small
-                    ><small v-else>{{
-                      index === 0 ? '按你设置的开始时间安排' : '按已查询交通时间安排'
-                    }}</small>
-                  </article>
-                </li>
-                <li v-if="!currentDay.stops.length" class="empty-day">
-                  这一天还没有安排地点，可继续补充。
-                </li>
-              </ol>
-              <div v-if="run.result.validation" class="budget-summary">
-                <strong>已知景点费用 ¥{{ run.result.validation.known_cost_yuan }}</strong
-                ><span
-                  >{{ run.result.validation.unknown_cost_count }} 项票价未知 ·
-                  不含住宿、餐饮与交通</span
-                >
-              </div>
-              <form
-                v-if="run.status !== 'confirmed'"
-                class="replan-form"
-                @submit.prevent="editDraft()"
-              >
-                <label>想早点结束？<input v-model="revisedEnd" type="time" required /></label
-                ><button class="secondary-action" type="submit" :disabled="busy">
-                  重新安排并检查
-                </button>
-              </form>
-            </template>
-            <template v-if="run.kind === 'story' && run.result.story_body">
-              <div class="story-paper">
-                <p class="eyebrow">FIELD NOTES · A PRIVATE STORY</p>
-                <label
-                  ><span>故事标题</span
-                  ><input
-                    v-model="editTitle"
-                    maxlength="160"
-                    :readonly="run.status === 'confirmed'" /></label
-                ><label
-                  ><span>你的旅行故事</span
-                  ><textarea
-                    v-model="editStory"
-                    maxlength="16000"
-                    :readonly="run.status === 'confirmed'"
-                    rows="14"
-                  ></textarea></label
+                  连接私人档案</button
                 ><button
-                  v-if="run.status !== 'confirmed'"
-                  class="secondary-action"
+                  v-else-if="pendingRequest"
+                  class="text-button"
                   type="button"
                   :disabled="busy"
-                  @click="editDraft()"
+                  @click="submit(true)"
                 >
-                  保存草稿修改并重新检查</button
-                ><small>{{
-                  run.status === 'confirmed'
-                    ? '已保存为独立私有快照；删除原记忆不会同步删除此故事。'
-                    : '确认前请先保存你的修改。手动添加内容由你核实。'
-                }}</small>
+                  重试同一任务
+                </button>
               </div>
-              <details class="source-records">
-                <summary>查看 {{ run.result.source_memories?.length ?? 0 }} 条原始旅行记录</summary>
-                <article v-for="memory in run.result.source_memories" :key="memory.id">
-                  <small>{{ memory.date }} · {{ memory.city }}</small
-                  ><strong>{{ memory.title }}</strong>
-                  <p>{{ memory.body }}</p>
-                  <span>{{ memory.photo_count }} 张可用照片 · {{ memory.vlog_count }} 段Vlog</span>
-                </article>
-              </details>
-            </template>
-            <section
-              v-if="run.result.unknowns.length || run.result.warnings.length"
-              class="unknown-card"
-            >
-              <h3>{{ run.kind === 'story' ? '保存前，再确认这些' : '出发前，再确认这些' }}</h3>
-              <ul>
-                <li v-for="(item, i) in [...run.result.unknowns, ...run.result.warnings]" :key="i">
-                  {{ item }}
-                </li>
-              </ul>
-            </section>
-            <details v-if="run.result.validation?.checks.length" class="validation-card">
-              <summary><ShieldCheck :size="16" />查看约束检查</summary>
-              <p v-for="(item, i) in run.result.validation.checks" :key="i">
-                <span :class="item.status">{{ item.status }}</span
-                >{{ item.message }}
-              </p>
-            </details>
-            <section class="execution-card">
-              <header>
-                <div>
-                  <p class="eyebrow">A TRACEABLE JOURNEY</p>
-                  <h3>小曦做了什么</h3>
+            </div>
+            <div v-if="busy && !run" class="result-empty working-state" role="status">
+              <div class="working-symbol">
+                <Sun :size="40" /><LoaderCircle class="spin" :size="76" />
+              </div>
+              <p class="eyebrow">A LITTLE THOUGHT GOES A LONG WAY</p>
+              <h2>正在把想法，<br />安排成一段旅程。</h2>
+              <p>小曦正在核对输入、执行已授权工具并检查约束，完成后会显示草案与实际调用记录。</p>
+              <span class="working-pill"><span></span>正在等待本次任务结果</span>
+            </div>
+            <div v-else-if="!run" class="planning-companion">
+              <div class="companion-photo" :class="{ 'without-photo': !contextPhoto }">
+                <img v-if="contextPhoto" :src="contextPhoto.image" :alt="contextPhoto.imageAlt" />
+                <div v-else class="companion-landscape" aria-hidden="true">
+                  <Sun :size="48" /><span></span>
                 </div>
-                <small>{{ run.events.length }} 条执行记录</small>
-              </header>
-              <ol>
-                <li v-for="event in run.events" :key="event.sequence">
-                  <span class="event-dot" :class="event.status"></span>
+                <div>
+                  <span>YOUR NEXT CHAPTER</span>
+                  <h2>{{ contextCity.replace(/市$/, '') }}，<br />值得慢慢走。</h2>
+                </div>
+                <small v-if="contextPhoto">目的地灵感图</small>
+              </div>
+              <div class="companion-copy">
+                <span class="companion-seal"><Sun :size="23" /></span>
+                <p class="eyebrow">YOUR TRAVEL COMPANION</p>
+                <h2>你负责心动，<br />我们一起安排。</h2>
+                <p>
+                  把想去的地方、喜欢的节奏告诉小曦。每天的安排与还要核实的细节，都会为你整理清楚。
+                </p>
+                <div class="brief-live-summary">
+                  <span><CalendarDays :size="15" />{{ summaryDate }} · {{ summaryDays }} 天</span
+                  ><span
+                    ><Compass :size="15" />{{
+                      pace === 'relaxed' ? '慢一点，留些空白' : '均衡安排'
+                    }}</span
+                  >
+                </div>
+                <ol class="companion-promises">
+                  <li>
+                    <span>01</span>
+                    <div>
+                      <strong>把每天安排得刚刚好</strong>
+                      <p>结合时间、预算和已知地点整理草案。</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span>02</span>
+                    <div>
+                      <strong>每一份信息，都有来处</strong>
+                      <p>保留工具记录，标出需要再次核实的细节。</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span>03</span>
+                    <div>
+                      <strong>最后一步，由你决定</strong>
+                      <p>查看、调整，再确认存入私人档案。</p>
+                    </div>
+                  </li>
+                </ol>
+                <div
+                  v-if="mode === 'plan' && capabilities && !capabilities.amap_configured"
+                  class="local-planning-note"
+                >
+                  <MapPin :size="17" />
                   <div>
-                    <p>{{ event.message }}</p>
-                    <small
-                      >{{ event.tool }} · {{ eventLabel(event.status)
-                      }}<template v-if="event.attempt > 1">
-                        · 第{{ event.attempt }}次尝试</template
-                      ></small
-                    >
-                    <details v-if="event.details && Object.keys(event.details).length">
-                      <summary>调用详情</summary>
-                      <pre>{{ JSON.stringify(event.details, null, 2) }}</pre>
-                    </details>
+                    <strong>带上你已经知道的地点</strong>
+                    <p>当前尚未连接地图查询。你可以补充地点和坐标，再生成一份条件草案。</p>
+                    <button class="text-button" type="button" @click="openCandidates">
+                      补充想去的地点<ArrowRight :size="14" />
+                    </button>
                   </div>
-                </li>
-              </ol>
-            </section>
-            <div v-if="run.status === 'confirmed'" class="saved-card" role="status">
-              <CircleCheck :size="24" />
-              <div>
-                <strong>这段{{ run.kind === 'plan' ? '旅程' : '故事' }}，已妥善收藏。</strong>
-                <p>保存在你的私人档案，可从“最近任务”重新打开。</p>
+                </div>
+                <p class="companion-bottom"><ShieldCheck :size="13" />私人整理 · 确认后保存</p>
               </div>
             </div>
-            <section
-              v-else-if="confirmation"
-              class="confirmation-card"
-              role="region"
-              aria-label="确认保存草案"
-            >
-              <h3>把当前版本存入私人档案？</h3>
-              <p>{{ confirmation.summary }}</p>
-              <p v-if="run.kind === 'story'">
-                保存后将形成独立故事副本；之后删除原记忆不会同步删除此副本。
+            <template v-else>
+              <div v-if="busy" class="updating-banner" role="status">
+                <LoaderCircle class="spin" :size="17" />小曦正在整理，完成后会更新此处。
+              </div>
+              <p v-if="hasPlan && editingBrief" class="editing-note">
+                正在调整旅行条件。生成新草案后再核对保存，也可以返回当前草案。
               </p>
-              <small
-                >第 {{ confirmation.revision }} 版 · 确认有效至
-                {{ new Date(confirmation.expires_at).toLocaleTimeString('zh-CN') }}</small
-              ><label v-if="confirmation.requires_unverified_acknowledgement" class="consent"
-                ><input v-model="acknowledged" type="checkbox" /><span>{{
-                  run.kind === 'story'
-                    ? '我了解记录和编辑内容未经独立事实核验，按条件草案保存。'
-                    : '我了解仍有未核实信息，按条件草案保存，出行前自行确认。'
-                }}</span></label
+              <header class="result-heading">
+                <div>
+                  <p class="eyebrow">
+                    {{
+                      run.kind === 'plan'
+                        ? 'YOUR JOURNEY, THOUGHTFULLY PLANNED'
+                        : 'YOUR TRAVEL STORY'
+                    }}
+                  </p>
+                  <h2>{{ run.title }}</h2>
+                </div>
+                <span class="revision-label">版本 {{ run.revision }}</span>
+              </header>
+              <div
+                class="result-status"
+                :class="[
+                  run.result.verification_status,
+                  { 'task-failed': run.status === 'failed' },
+                ]"
               >
-              <div>
-                <button
-                  class="secondary-action"
-                  type="button"
-                  :disabled="busy"
-                  @click="clearConfirmation"
+                <CircleCheck
+                  v-if="
+                    run.status === 'confirmed' || run.result.verification_status === 'validated'
+                  "
+                  :size="20"
+                /><CircleAlert v-else :size="20" />
+                <div>
+                  <strong>{{ statusText }}</strong>
+                  <p>{{ run.result.summary }}</p>
+                </div>
+                <span>{{
+                  run.result.intent_source === 'deepseek' ? '模型辅助理解' : '本地规则整理'
+                }}</span>
+              </div>
+              <button
+                v-if="run.status === 'running'"
+                class="secondary-action refresh-run"
+                type="button"
+                :disabled="busy"
+                @click="restore(run.id)"
+              >
+                <RefreshCw :size="15" />刷新任务状态
+              </button>
+              <template v-if="hasPlan">
+                <div class="itinerary-facts">
+                  <span><CalendarDays :size="15" />{{ summaryDate }} 出发</span
+                  ><span><Clock3 :size="15" />{{ summaryDays }} 天行程</span
+                  ><span><MapPin :size="15" />{{ placeCount }} 个地点</span
+                  ><span
+                    ><ShieldCheck :size="15" />{{
+                      run.status === 'confirmed' ? '已存入私人档案' : '待你核对与确认'
+                    }}</span
+                  >
+                </div>
+                <div
+                  class="result-tabs"
+                  role="tablist"
+                  aria-label="行程查看方式"
+                  @keydown="onResultTabKeydown"
                 >
-                  再看看</button
-                ><button
-                  class="primary-action"
+                  <button
+                    id="schedule-tab"
+                    :tabindex="resultTab === 'schedule' ? 0 : -1"
+                    type="button"
+                    role="tab"
+                    :aria-selected="resultTab === 'schedule'"
+                    aria-controls="schedule-panel"
+                    :class="{ active: resultTab === 'schedule' }"
+                    @click="resultTab = 'schedule'"
+                  >
+                    <CalendarDays :size="16" />每日安排</button
+                  ><button
+                    id="map-tab"
+                    :tabindex="resultTab === 'map' ? 0 : -1"
+                    type="button"
+                    role="tab"
+                    :aria-selected="resultTab === 'map'"
+                    aria-controls="map-panel"
+                    :class="{ active: resultTab === 'map' }"
+                    @click="resultTab = 'map'"
+                  >
+                    <Map :size="16" />地点地图</button
+                  ><button
+                    id="execution-tab"
+                    :tabindex="resultTab === 'execution' ? 0 : -1"
+                    type="button"
+                    role="tab"
+                    :aria-selected="resultTab === 'execution'"
+                    aria-controls="execution-panel"
+                    :class="{ active: resultTab === 'execution' }"
+                    @click="resultTab = 'execution'"
+                  >
+                    <ListChecks :size="16" />执行记录<span>{{ run.events.length }}</span>
+                  </button>
+                </div>
+                <section
+                  id="schedule-panel"
+                  v-show="resultTab === 'schedule'"
+                  class="schedule-panel"
+                  role="tabpanel"
+                  aria-labelledby="schedule-tab"
+                >
+                  <div class="day-tabs" role="group" aria-label="每日行程">
+                    <button
+                      v-for="day in run.result.days"
+                      :key="day.day"
+                      type="button"
+                      :class="{ active: activeDay === day.day }"
+                      :aria-pressed="activeDay === day.day"
+                      @click="activeDay = day.day"
+                    >
+                      <small>DAY {{ String(day.day).padStart(2, '0') }}</small
+                      ><strong>{{ day.date.slice(5).replace('-', ' / ') }}</strong
+                      ><span>{{ day.stops.length }} 个地点</span>
+                    </button>
+                  </div>
+                  <div v-if="currentDay" class="day-heading">
+                    <div>
+                      <p class="eyebrow">A DAY TO REMEMBER</p>
+                      <h3>
+                        第 {{ currentDay.day }} 天，慢慢走进{{ contextCity.replace(/市$/, '') }}。
+                      </h3>
+                    </div>
+                    <span>{{ currentDay.start }} — {{ currentDay.end }}</span>
+                  </div>
+                  <ol v-if="currentDay" class="day-timeline">
+                    <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
+                      <div class="stop-time">
+                        <strong>{{ stop.arrival }}</strong
+                        ><small>{{ stop.departure }}</small>
+                      </div>
+                      <span class="stop-dot">{{ index + 1 }}</span>
+                      <article>
+                        <div>
+                          <h3>{{ stop.name }}</h3>
+                          <button
+                            v-if="run.status !== 'confirmed'"
+                            class="text-button remove-stop"
+                            type="button"
+                            :disabled="busy"
+                            :aria-label="`从草案移除${stop.name}`"
+                            @click="editDraft(stop.candidate_id)"
+                          >
+                            <Trash2 :size="13" />移除
+                          </button>
+                        </div>
+                        <p>
+                          <span class="source-chip"
+                            ><MapPin :size="11" />{{ sourceLabel(stop.source) }}</span
+                          ><span><Clock3 :size="11" />停留 {{ stop.stay_minutes }} 分钟</span>
+                        </p>
+                        <small v-if="stop.timing_basis === 'planning_buffer'"
+                          >时间含规划预留，交通尚需核实</small
+                        ><small v-else>{{
+                          index === 0 ? '按你设置的开始时间安排' : '按已查询交通时间安排'
+                        }}</small>
+                      </article>
+                    </li>
+                    <li v-if="!currentDay.stops.length" class="empty-day">
+                      这一天还没有安排地点，可继续补充。
+                    </li>
+                  </ol>
+                  <div v-if="run.result.validation" class="budget-summary">
+                    <span class="budget-symbol"><Wallet :size="20" /></span>
+                    <div>
+                      <small>景点费用，先心里有数</small
+                      ><strong>已知 ¥{{ run.result.validation.known_cost_yuan }}</strong>
+                    </div>
+                    <span
+                      >{{
+                        run.result.validation.unknown_cost_count
+                      }}
+                      项票价未知<br />不含住宿、餐饮与交通</span
+                    >
+                  </div>
+                  <form
+                    v-if="run.status !== 'confirmed'"
+                    class="replan-form"
+                    @submit.prevent="editDraft()"
+                  >
+                    <div>
+                      <strong>给这一天，多留一点空白</strong
+                      ><label
+                        >想早点结束？<input
+                          v-model="revisedEnd"
+                          type="time"
+                          required
+                          aria-label="调整每天结束时间"
+                      /></label>
+                    </div>
+                    <button class="secondary-action" type="submit" :disabled="busy">
+                      <RefreshCw :size="14" />重新安排并检查
+                    </button>
+                  </form>
+                </section>
+                <section
+                  id="map-panel"
+                  v-show="resultTab === 'map'"
+                  class="map-panel"
+                  role="tabpanel"
+                  aria-labelledby="map-tab"
+                >
+                  <header class="panel-heading">
+                    <div>
+                      <h3>把沿途的地点，放在一起看。</h3>
+                      <p>地图展示候选地点与游览顺序，交通和导航信息仍需核实。</p>
+                    </div>
+                    <Map :size="23" />
+                  </header>
+                  <AgentRouteMap
+                    v-if="resultTab === 'map'"
+                    :days="run.result.days ?? []"
+                    :active-day="activeDay"
+                    :allow-external="run.request.allow_external === true"
+                  />
+                  <div class="map-day-selector" role="group" aria-label="地图查看日期">
+                    <button
+                      v-for="day in run.result.days"
+                      :key="day.day"
+                      type="button"
+                      :class="{ active: activeDay === day.day }"
+                      :aria-pressed="activeDay === day.day"
+                      @click="activeDay = day.day"
+                    >
+                      第 {{ day.day }} 天 · {{ day.stops.length }} 个地点
+                    </button>
+                  </div>
+                  <ol v-if="currentDay" class="map-stop-list">
+                    <li v-for="(stop, index) in currentDay.stops" :key="stop.candidate_id">
+                      <span>{{ index + 1 }}</span
+                      ><strong>{{ stop.name }}</strong
+                      ><small>{{ stop.arrival }} · {{ sourceLabel(stop.source) }}</small>
+                    </li>
+                  </ol>
+                </section>
+              </template>
+              <template v-if="run.kind === 'story' && run.result.story_body"
+                ><div class="story-paper">
+                  <p class="eyebrow">FIELD NOTES · A PRIVATE STORY</p>
+                  <label
+                    ><span>故事标题</span
+                    ><input
+                      v-model="editTitle"
+                      maxlength="160"
+                      :readonly="run.status === 'confirmed'" /></label
+                  ><label
+                    ><span>你的旅行故事</span
+                    ><textarea
+                      v-model="editStory"
+                      maxlength="16000"
+                      :readonly="run.status === 'confirmed'"
+                      rows="14"
+                    ></textarea></label
+                  ><button
+                    v-if="run.status !== 'confirmed'"
+                    class="secondary-action"
+                    type="button"
+                    :disabled="busy"
+                    @click="editDraft()"
+                  >
+                    保存草稿修改并重新检查</button
+                  ><small>{{
+                    run.status === 'confirmed'
+                      ? '已保存为独立私有快照；删除原记忆不会同步删除此故事。'
+                      : '确认前请先保存你的修改。手动添加内容由你核实。'
+                  }}</small>
+                </div>
+                <details class="source-records">
+                  <summary>
+                    查看 {{ run.result.source_memories?.length ?? 0 }} 条原始旅行记录
+                  </summary>
+                  <article v-for="memory in run.result.source_memories" :key="memory.id">
+                    <small>{{ memory.date }} · {{ memory.city }}</small
+                    ><strong>{{ memory.title }}</strong>
+                    <p>{{ memory.body }}</p>
+                    <span
+                      >{{ memory.photo_count }} 张可用照片 · {{ memory.vlog_count }} 段Vlog</span
+                    >
+                  </article>
+                </details></template
+              >
+              <section
+                v-if="run.result.unknowns.length || run.result.warnings.length"
+                class="unknown-card"
+              >
+                <span class="unknown-symbol"><CircleAlert :size="19" /></span>
+                <div>
+                  <h3>{{ run.kind === 'story' ? '保存前，再确认这些' : '出发前，再确认这些' }}</h3>
+                  <ul>
+                    <li
+                      v-for="(item, i) in [...run.result.unknowns, ...run.result.warnings]"
+                      :key="i"
+                    >
+                      {{ item }}
+                    </li>
+                  </ul>
+                </div>
+              </section>
+              <details v-if="run.result.validation?.checks.length" class="validation-card">
+                <summary>
+                  <ShieldCheck :size="16" /><span>查看约束检查</span
+                  ><small>{{ run.result.validation.checks.length }} 项</small
+                  ><ChevronDown :size="15" />
+                </summary>
+                <p v-for="(item, i) in run.result.validation.checks" :key="i">
+                  <span :class="item.status">{{ checkLabel(item.status) }}</span
+                  >{{ item.message }}
+                </p>
+              </details>
+              <section
+                id="execution-panel"
+                v-show="!hasPlan || resultTab === 'execution'"
+                class="execution-card"
+                :role="hasPlan ? 'tabpanel' : 'region'"
+                :aria-labelledby="hasPlan ? 'execution-tab' : 'execution-heading'"
+              >
+                <header>
+                  <div>
+                    <p class="eyebrow">A TRACEABLE JOURNEY</p>
+                    <h3 id="execution-heading">小曦做了什么</h3>
+                  </div>
+                  <span>{{ run.events.length }} 条执行记录</span>
+                </header>
+                <p class="execution-intro">
+                  以下是本次任务实际保留的调用与检查记录。未完成、重试和跳过的步骤也会如实显示。
+                </p>
+                <p v-if="!run.events.length" class="no-events">本次任务暂未返回执行记录。</p>
+                <ol>
+                  <li v-for="event in run.events" :key="event.sequence">
+                    <span class="event-dot" :class="event.status"
+                      ><Check
+                        v-if="event.status === 'success' || event.status === 'succeeded'"
+                        :size="12"
+                      /><CircleAlert
+                        v-else-if="event.status === 'failed' || event.status === 'error'"
+                        :size="12"
+                      /><span v-else>{{ event.sequence }}</span></span
+                    >
+                    <div>
+                      <div class="event-heading">
+                        <p>{{ event.message }}</p>
+                        <span :class="event.status">{{ eventLabel(event.status) }}</span>
+                      </div>
+                      <small
+                        >{{ event.tool
+                        }}<template v-if="event.attempt > 1">
+                          · 第{{ event.attempt }}次尝试</template
+                        ><template v-if="event.duration_ms != null">
+                          · {{ event.duration_ms }} ms</template
+                        ></small
+                      >
+                      <details v-if="event.details && Object.keys(event.details).length">
+                        <summary>调用详情<ChevronDown :size="12" /></summary>
+                        <pre>{{ JSON.stringify(event.details, null, 2) }}</pre>
+                      </details>
+                    </div>
+                  </li>
+                </ol>
+              </section>
+              <div v-if="run.status === 'confirmed'" class="saved-card" role="status">
+                <span><CircleCheck :size="26" /></span>
+                <div>
+                  <strong>这段{{ run.kind === 'plan' ? '旅程' : '故事' }}，已妥善收藏。</strong>
+                  <p>保存在你的私人档案，可从“最近任务”重新打开。</p>
+                </div>
+                <ShieldCheck :size="20" />
+              </div>
+              <section
+                v-else-if="confirmation"
+                ref="confirmationAnchor"
+                class="confirmation-card"
+                role="region"
+                aria-label="确认保存草案"
+                tabindex="-1"
+              >
+                <div class="confirmation-heading">
+                  <span><ShieldCheck :size="22" /></span>
+                  <div>
+                    <p class="eyebrow">ONE LAST LOOK, THEN KEEP IT CLOSE</p>
+                    <h3>把当前版本存入私人档案？</h3>
+                  </div>
+                </div>
+                <p>{{ confirmation.summary }}</p>
+                <p v-if="run.kind === 'story'">
+                  保存后将形成独立故事副本；之后删除原记忆不会同步删除此副本。
+                </p>
+                <small
+                  >第 {{ confirmation.revision }} 版 · 确认有效至
+                  {{ new Date(confirmation.expires_at).toLocaleTimeString('zh-CN') }}</small
+                ><label v-if="confirmation.requires_unverified_acknowledgement" class="consent"
+                  ><input v-model="acknowledged" type="checkbox" /><span>{{
+                    run.kind === 'story'
+                      ? '我了解记录和编辑内容未经独立事实核验，按条件草案保存。'
+                      : '我了解仍有未核实信息，按条件草案保存，出行前自行确认。'
+                  }}</span></label
+                >
+                <div class="confirmation-actions">
+                  <button
+                    class="secondary-action"
+                    type="button"
+                    :disabled="busy"
+                    @click="clearConfirmation"
+                  >
+                    再看看</button
+                  ><button
+                    class="primary-action"
+                    type="button"
+                    :disabled="
+                      busy || (confirmation.requires_unverified_acknowledgement && !acknowledged)
+                    "
+                    @click="save"
+                  >
+                    {{ busy ? '正在保存…' : '确认保存到私人档案' }}
+                  </button>
+                </div>
+              </section>
+              <div v-else-if="canSave" class="save-action-card">
+                <div>
+                  <ShieldCheck :size="19" />
+                  <p>
+                    <strong>喜欢这份安排，就把它留下。</strong
+                    ><span>核对当前版本后，再由你确认保存。</span>
+                  </p>
+                </div>
+                <button
+                  class="primary-action save-preview"
                   type="button"
                   :disabled="
-                    busy || (confirmation.requires_unverified_acknowledgement && !acknowledged)
+                    busy ||
+                    editingBrief ||
+                    (run.kind === 'story' &&
+                      (editTitle !== run.title || editStory !== run.result.story_body))
                   "
-                  @click="save"
+                  @click="previewSave"
                 >
-                  {{ busy ? '正在保存…' : '确认保存到私人档案' }}
+                  <ShieldCheck :size="17" />核对并保存当前草案<ArrowRight :size="17" />
                 </button>
               </div>
-            </section>
-            <button
-              v-else-if="canSave"
-              class="primary-action save-preview"
-              type="button"
-              :disabled="
-                busy ||
-                (run.kind === 'story' &&
-                  (editTitle !== run.title || editStory !== run.result.story_body))
-              "
-              @click="previewSave"
-            >
-              <ShieldCheck :size="18" />核对并保存当前草案<ArrowRight :size="17" />
-            </button>
-            <p v-else class="save-blocked">补齐信息或解决冲突后，才能保存草案。</p>
-          </template>
-        </section>
+              <div v-else-if="run.status !== 'running'" class="save-blocked">
+                <CircleAlert :size="18" />
+                <div>
+                  <strong>{{
+                    run.status === 'failed'
+                      ? '本次任务还没有可保存的草案'
+                      : '再补充一点，旅程就更完整'
+                  }}</strong>
+                  <p>补齐信息或解决冲突后，才能保存草案。</p>
+                  <button
+                    v-if="mode === 'plan'"
+                    class="text-button"
+                    type="button"
+                    @click="openCandidates"
+                  >
+                    补充想去的地点<ArrowRight :size="14" />
+                  </button>
+                </div>
+              </div>
+            </template>
+          </section>
+        </div>
+        <footer class="workspace-footer">
+          <span
+            >Voyaura · Plan the journey. Shape the story.
+            <a href="/discover/credits.html" target="_blank" rel="noopener">影像署名</a></span
+          ><span><ShieldCheck :size="12" />不会自动购买、公开发布或点亮城市</span>
+        </footer>
       </div>
     </div>
   </main>
 </template>
 
-<style scoped>
-.agent-workspace {
-  position: absolute;
-  inset: 0 0 0 78px;
-  display: flex;
-  flex-direction: column;
-  background: #f5f2e9;
-  color: #2d3831;
-  overflow: hidden;
-}
-.workspace-header {
-  height: 90px;
-  min-height: 90px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 36px;
-  border-bottom: 1px solid #dcd9cd;
-  background: #fbf8f0;
-}
-.workspace-heading {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
-.workspace-heading h1 {
-  font-size: 21px;
-  letter-spacing: -0.7px;
-  margin: 5px 0;
-}
-.icon-button {
-  display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
-  border: 1px solid #d7d6cb;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-}
-.workspace-header-actions {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-}
-.private-badge {
-  display: flex;
-  gap: 6px;
-  color: #6d7d67;
-  font-size: 11px;
-}
-.text-button {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  padding: 5px 0;
-  border: 0;
-  background: transparent;
-  color: #626f60;
-  font-size: 11px;
-  cursor: pointer;
-}
-.text-button:disabled {
-  opacity: 0.4;
-  cursor: wait;
-}
-.workspace-scroll {
-  flex: 1;
-  overflow: auto;
-}
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  max-width: 1400px;
-  margin: 0 auto;
-  align-items: start;
-}
-.brief-column {
-  padding: 34px 28px;
-  border-right: 1px solid #ddded0;
-}
-.companion-seal {
-  display: grid;
-  place-items: center;
-  width: 43px;
-  height: 43px;
-  margin-bottom: 20px;
-  background: #efe4cf;
-  border-radius: 50%;
-  color: #ac6c2d;
-}
-.brief-intro .eyebrow {
-  font-size: 8px;
-  letter-spacing: 1.3px;
-  color: #82735b;
-}
-.brief-intro h2 {
-  white-space: pre-line;
-  font-family: 'Source Serif 4', 'Microsoft YaHei', serif;
-  font-size: 26px;
-  line-height: 1.5;
-  letter-spacing: -1px;
-  margin: 10px 0;
-}
-.brief-intro > p:last-child {
-  font-size: 12px;
-  line-height: 1.9;
-  color: #737d70;
-}
-.mode-switch {
-  display: flex;
-  border: 1px solid #d8d9cd;
-  padding: 4px;
-  border-radius: 9px;
-  margin: 23px 0;
-  background: #eaece1;
-}
-.mode-switch button {
-  flex: 1;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-  padding: 9px 3px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 11px;
-  color: #78816f;
-  cursor: pointer;
-}
-.mode-switch button.active {
-  background: #fffdf5;
-  color: #3b5546;
-  box-shadow: 0 2px 5px #4d5e4312;
-}
-.travel-brief {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-.field > span {
-  display: flex;
-  justify-content: space-between;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.field small {
-  font-size: 9px;
-  font-weight: 400;
-  color: #929587;
-}
-.field input,
-.field textarea,
-.field select {
-  width: 100%;
-  min-width: 0;
-  padding: 10px 9px;
-  border: 1px solid #d5d6c9;
-  border-radius: 6px;
-  color: #3c463d;
-  background: #fcfbf4;
-  font: 12px/1.7 inherit;
-  outline-offset: 2px;
-}
-.field textarea {
-  resize: vertical;
-  min-height: 94px;
-}
-.field input:focus,
-.field textarea:focus,
-.field select:focus {
-  border-color: #849c7d;
-  outline: 2px solid #879d7830;
-}
-.field-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.candidate-input {
-  padding: 13px;
-  border: 1px dashed #bdc8b5;
-  border-radius: 8px;
-  background: #edf0e4;
-}
-.candidate-input summary {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-}
-.candidate-input summary span {
-  margin-left: auto;
-  color: #8c927e;
-}
-.candidate-input > p {
-  font-size: 10px;
-  line-height: 1.8;
-  color: #78816d;
-}
-.candidate-input fieldset {
-  position: relative;
-  min-width: 0;
-  margin: 14px 0;
-  padding: 10px;
-  border: 1px solid #d0d6c5;
-  border-radius: 6px;
-}
-.candidate-input legend {
-  font-size: 10px;
-  color: #7a866d;
-}
-.candidate-input .field {
-  margin: 6px 0;
-}
-.candidate-input .field-pair {
-  gap: 6px;
-}
-.candidate-input .field > span {
-  font-size: 9px;
-}
-.candidate-input .field input {
-  padding: 7px;
-  font-size: 11px;
-}
-.remove-candidate {
-  position: absolute;
-  right: 5px;
-  top: -13px;
-  border: 0;
-  background: #edf0e4;
-  color: #956b57;
-  cursor: pointer;
-}
-.consent {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 11px;
-  line-height: 1.7;
-  color: #57684e;
-  cursor: pointer;
-}
-.consent input {
-  accent-color: #587955;
-  width: 15px;
-  height: 15px;
-  min-width: 15px;
-  margin: 2px 0;
-}
-.consent small {
-  display: block;
-  font-size: 9px;
-  line-height: 1.8;
-  color: #909480;
-}
-.consent.compact {
-  font-size: 10px;
-}
-.primary-action,
-.secondary-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 11px 15px;
-  border: 0;
-  border-radius: 7px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.primary-action {
-  background: #e9583e;
-  color: #fffaf1;
-  box-shadow: 0 4px 10px #ad4c2a12;
-}
-.primary-action svg:last-child {
-  margin-left: auto;
-}
-.primary-action:disabled,
-.secondary-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.secondary-action {
-  border: 1px solid #cbd2bd;
-  background: #fafaf0;
-  color: #506344;
-}
-.brief-footnote {
-  font-size: 9px;
-  line-height: 1.9;
-  text-align: center;
-  color: #969a89;
-  margin: 0;
-}
-.result-column {
-  padding: 32px 36px 45px;
-  min-width: 0;
-}
-.result-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 620px;
-  text-align: center;
-}
-.empty-atlas {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  width: 220px;
-  height: 220px;
-  margin: 5px 0 40px;
-  border: 1px solid #cdd4bd;
-  border-radius: 50%;
-  background: radial-gradient(ellipse, #e7eddd, #f4f3e9 70%);
-  color: #7c9470;
-}
-.empty-atlas:after {
-  position: absolute;
-  content: '';
-  inset: 14px;
-  border: 1px dashed #cbd4bc;
-  border-radius: 50%;
-}
-.empty-atlas > span {
-  font-size: 8px;
-  letter-spacing: 2.3px;
-}
-.result-empty h2 {
-  font-family: 'Microsoft YaHei', serif;
-  font-weight: 500;
-  font-size: 29px;
-  line-height: 1.6;
-  letter-spacing: 1px;
-  margin: 17px 0;
-}
-.result-empty > p:not(.eyebrow) {
-  max-width: 350px;
-  color: #8a907e;
-  font-size: 12px;
-  line-height: 2;
-}
-.promise-row {
-  display: flex;
-  gap: 22px;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 27px;
-}
-.promise-row span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: #7d8d6e;
-}
-.result-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-}
-.result-heading h2 {
-  margin: 8px 0 18px;
-  font-size: 24px;
-  line-height: 1.6;
-  letter-spacing: -0.6px;
-}
-.revision-label {
-  white-space: nowrap;
-  padding: 5px 8px;
-  border: 1px solid #d9dccb;
-  border-radius: 4px;
-  color: #8c917f;
-  font-size: 10px;
-}
-.result-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid #ddcfb1;
-  border-radius: 7px;
-  background: #f3eddc;
-  color: #92713d;
-  font-size: 11px;
-}
-.result-status > span {
-  margin-left: auto;
-  color: #8d917e;
-  font-size: 9px;
-}
-.result-status.validated {
-  color: #4b754f;
-  border-color: #bdcdb3;
-  background: #e7edde;
-}
-.result-status.conflict {
-  color: #ae533c;
-  border-color: #ddbcaa;
-  background: #f3e7dc;
-}
-.result-summary {
-  margin: 15px 0 20px;
-  font-size: 12px;
-  line-height: 2;
-  color: #79806e;
-  white-space: pre-line;
-}
-.day-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 18px 0;
-}
-.day-tabs button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  padding: 13px;
-  border: 1px solid #dbdecd;
-  border-radius: 7px;
-  background: #f9f8f0;
-  color: #838c78;
-  cursor: pointer;
-}
-.day-tabs button.active {
-  border-color: #829e75;
-  color: #46653b;
-  background: #edf1e2;
-}
-.day-tabs small {
-  font-size: 8px;
-  letter-spacing: 1px;
-}
-.day-tabs strong {
-  font-size: 13px;
-}
-.day-tabs span {
-  font-size: 9px;
-  color: #8d977f;
-}
-.day-timeline {
-  list-style: none;
-  margin: 24px 0;
-  padding: 0;
-}
-.day-timeline > li {
-  position: relative;
-  display: grid;
-  grid-template-columns: 42px 24px 1fr;
-  gap: 12px;
-  padding-bottom: 23px;
-}
-.day-timeline > li:not(:last-child):after {
-  position: absolute;
-  content: '';
-  width: 1px;
-  left: 66px;
-  top: 24px;
-  bottom: 0;
-  background: #d7deca;
-}
-.stop-time {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 11px;
-}
-.stop-time small {
-  color: #9b9e8c;
-  font-size: 9px;
-}
-.stop-dot {
-  display: grid;
-  place-items: center;
-  position: relative;
-  z-index: 1;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid #d2d9c3;
-  background: #faf9ef;
-  color: #7b8b67;
-  font-size: 10px;
-}
-.day-timeline article > div {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.day-timeline h3 {
-  font-size: 14px;
-  margin: 0;
-}
-.day-timeline article p {
-  margin: 8px 0 5px;
-  font-size: 10px;
-  color: #8c937d;
-}
-.day-timeline article p span {
-  border: 1px solid #d9deca;
-  border-radius: 3px;
-  padding: 2px 4px;
-  font-size: 9px;
-}
-.day-timeline article > small {
-  font-size: 9px;
-  color: #a2916c;
-}
-.empty-day {
-  display: block !important;
-  padding: 20px;
-  color: #929681;
-  font-size: 12px;
-}
-.budget-summary {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 0;
-  border-top: 1px solid #dedfcf;
-  font-size: 11px;
-}
-.budget-summary span {
-  font-size: 9px;
-  color: #8d937e;
-}
-.replan-form {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 14px 0 20px;
-  padding: 12px;
-  background: #edeedf;
-  border-radius: 7px;
-}
-.replan-form label {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 10px;
-}
-.replan-form input {
-  max-width: 100px;
-  border: 1px solid #cbd1ba;
-  border-radius: 4px;
-  padding: 5px;
-  background: #faf9ee;
-  font-size: 11px;
-}
-.replan-form button {
-  min-height: 32px;
-  padding: 7px 9px;
-  font-size: 10px;
-}
-.unknown-card {
-  margin: 22px 0;
-  padding: 17px 18px;
-  border-left: 3px solid #c1a56a;
-  background: #efeada;
-}
-.unknown-card h3 {
-  font-size: 12px;
-  margin: 0 0 10px;
-  color: #817347;
-}
-.unknown-card ul {
-  padding-left: 16px;
-  margin: 0;
-}
-.unknown-card li {
-  margin: 7px 0;
-  color: #908467;
-  font-size: 10px;
-  line-height: 1.9;
-}
-.validation-card {
-  margin: 18px 0;
-  border: 1px solid #dadfcb;
-  border-radius: 7px;
-  padding: 13px;
-}
-.validation-card summary {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  cursor: pointer;
-  font-size: 11px;
-  color: #768567;
-}
-.validation-card p {
-  display: flex;
-  gap: 8px;
-  font-size: 10px;
-  color: #899276;
-  line-height: 1.7;
-}
-.validation-card p span {
-  font-size: 9px;
-}
-.execution-card {
-  margin-top: 24px;
-  padding: 20px;
-  border: 1px solid #dcdccc;
-  border-radius: 10px;
-  background: #f9f8ef;
-}
-.execution-card > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.execution-card h3 {
-  font-size: 14px;
-  margin: 5px 0 18px;
-}
-.execution-card header > small {
-  font-size: 10px;
-  color: #8d957d;
-}
-.execution-card .eyebrow {
-  font-size: 8px;
-  letter-spacing: 1.2px;
-  color: #9a967c;
-}
-.execution-card ol {
-  padding: 0;
-  list-style: none;
-  margin: 5px 0 0;
-  max-height: 350px;
-  overflow: auto;
-}
-.execution-card li {
-  display: flex;
-  gap: 12px;
-  padding: 9px 0;
-}
-.event-dot {
-  width: 7px;
-  height: 7px;
-  min-width: 7px;
-  margin-top: 4px;
-  background: #9ba58b;
-  border-radius: 50%;
-}
-.event-dot.failed,
-.event-dot.error {
-  background: #ca8064;
-}
-.event-dot.success,
-.event-dot.succeeded {
-  background: #6f9765;
-}
-.execution-card li p {
-  font-size: 10px;
-  line-height: 1.8;
-  margin: 0;
-  color: #79846a;
-}
-.execution-card li small {
-  font-size: 9px;
-  color: #a2a68e;
-}
-.execution-card details {
-  margin-top: 7px;
-  color: #959c81;
-  font-size: 9px;
-}
-.execution-card details pre {
-  max-width: 100%;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.execution-card summary {
-  cursor: pointer;
-}
-.save-preview {
-  display: flex;
-  width: 100%;
-  margin-top: 22px;
-}
-.confirmation-card {
-  margin-top: 22px;
-  padding: 20px;
-  border: 1px solid #adbd9b;
-  border-radius: 10px;
-  background: #edf1e0;
-}
-.confirmation-card h3 {
-  font-size: 14px;
-  margin: 0 0 10px;
-}
-.confirmation-card p {
-  font-size: 11px;
-  line-height: 1.9;
-  color: #6f7d5b;
-}
-.confirmation-card > small {
-  font-size: 10px;
-  color: #8a9875;
-}
-.confirmation-card .consent {
-  margin: 18px 0;
-}
-.confirmation-card > div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
-}
-.confirmation-card > div .primary-action {
-  box-shadow: none;
-}
-.saved-card {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 20px;
-  padding: 19px;
-  border: 1px solid #c5d1b4;
-  border-radius: 8px;
-  background: #e7eddb;
-  color: #5c784b;
-}
-.saved-card strong {
-  font-size: 13px;
-}
-.saved-card p {
-  font-size: 10px;
-  margin: 7px 0 0;
-  color: #879774;
-}
-.save-blocked {
-  text-align: center;
-  font-size: 11px;
-  line-height: 1.8;
-  color: #a6936a;
-  padding: 15px;
-}
-.workspace-error {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: #f0e0d5;
-  border: 1px solid #dcb49d;
-  border-radius: 7px;
-  color: #9c543d;
-  font-size: 12px;
-  margin-bottom: 20px;
-}
-.workspace-error small {
-  font-size: 10px;
-}
-.workspace-error button {
-  align-self: flex-start;
-  color: #ac6444;
-}
-.story-paper {
-  padding: 25px;
-  background: #fffaf0;
-  border: 1px solid #ddd6be;
-  box-shadow: 0 8px 20px #74734808;
-}
-.story-paper > label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 16px 0;
-}
-.story-paper label > span {
-  font-size: 10px;
-  color: #a2987a;
-}
-.story-paper input,
-.story-paper textarea {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid #e3dcc7;
-  padding: 8px 0;
-  resize: vertical;
-  color: #5d624f;
-  line-height: 2;
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-.story-paper input {
-  font-size: 20px;
-  font-weight: 600;
-}
-.story-paper > small {
-  display: block;
-  margin-top: 12px;
-  font-size: 10px;
-  color: #a39a7f;
-}
-.source-records {
-  margin: 18px 0;
-  padding: 16px;
-  border: 1px solid #dfdecb;
-  border-radius: 8px;
-  font-size: 11px;
-  color: #7a836c;
-}
-.source-records summary {
-  cursor: pointer;
-}
-.source-records article {
-  padding: 15px 0;
-  border-bottom: 1px solid #e2e2d0;
-}
-.source-records article strong,
-.source-records article small {
-  display: block;
-  margin: 6px 0;
-}
-.source-records p {
-  white-space: pre-wrap;
-  line-height: 1.9;
-  font-size: 11px;
-}
-.source-records article span,
-.source-records article small {
-  font-size: 9px;
-  color: #a0a48b;
-}
-.history-strip {
-  margin: 22px 28px 0;
-  padding: 18px;
-  border: 1px solid #d6ddc5;
-  border-radius: 10px;
-  background: #edf1e2;
-}
-.history-strip > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-}
-.history-strip > button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 0;
-  text-align: left;
-  border: 0;
-  border-bottom: 1px solid #d8dfc8;
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  color: #6d7a59;
-}
-.history-strip > button small {
-  margin-left: auto;
-  font-size: 10px;
-  color: #9aa486;
-}
-.history-strip > p {
-  font-size: 11px;
-  color: #8d997b;
-}
-@media (min-width: 1440px) {
-  .brief-column {
-    padding: 40px 30px;
-  }
-  .workspace-grid {
-    grid-template-columns: 360px minmax(0, 1fr);
-  }
-  .result-column {
-    padding: 40px 48px;
-  }
-  .result-empty {
-    min-height: 690px;
-  }
-}
-@media (max-width: 1000px) {
-  .workspace-header {
-    padding: 0 22px;
-  }
-  .workspace-grid {
-    grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
-  }
-  .brief-column {
-    padding: 25px 20px;
-  }
-  .result-column {
-    padding: 26px 22px;
-  }
-  .private-badge {
-    display: none;
-  }
-  .result-heading h2 {
-    font-size: 20px;
-  }
-  .day-tabs button {
-    padding: 10px 8px;
-  }
-  .promise-row {
-    gap: 12px;
-  }
-  .replan-form {
-    flex-wrap: wrap;
-  }
-}
-@media (max-width: 760px) {
-  .agent-workspace {
-    inset: 0 0 68px;
-  }
-  .workspace-header {
-    height: 78px;
-    min-height: 78px;
-    padding: 0 18px;
-  }
-  .workspace-heading {
-    gap: 10px;
-  }
-  .workspace-heading h1 {
-    font-size: 18px;
-  }
-  .workspace-heading .eyebrow {
-    font-size: 8px;
-  }
-  .workspace-grid {
-    grid-template-columns: 1fr;
-  }
-  .brief-column {
-    padding: 27px 22px;
-    border-right: 0;
-    border-bottom: 1px solid #dcdccc;
-  }
-  .brief-intro {
-    position: relative;
-    padding-left: 58px;
-  }
-  .companion-seal {
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
-  .brief-intro h2 {
-    font-size: 23px;
-    white-space: normal;
-    margin: 9px 0;
-  }
-  .brief-intro h2 br {
-    display: none;
-  }
-  .brief-intro > p:last-child {
-    font-size: 11px;
-  }
-  .brief-intro .eyebrow {
-    font-size: 7px;
-    letter-spacing: 0.7px;
-  }
-  .travel-brief {
-    gap: 15px;
-  }
-  .field-pair {
-    gap: 13px;
-  }
-  .result-column {
-    padding: 27px 22px 35px;
-  }
-  .result-empty {
-    min-height: 440px;
-  }
-  .empty-atlas {
-    width: 160px;
-    height: 160px;
-    margin: 10px 0 20px;
-  }
-  .empty-atlas svg {
-    width: 50px;
-  }
-  .result-empty h2 {
-    font-size: 24px;
-  }
-  .workspace-header-actions .text-button {
-    font-size: 10px;
-  }
-  .result-heading h2 {
-    font-size: 20px;
-  }
-  .history-strip {
-    margin: 15px 18px 0;
-    padding: 14px;
-  }
-  .confirmation-card {
-    padding: 16px;
-  }
-  .confirmation-card > div {
-    flex-wrap: wrap;
-  }
-  .story-paper {
-    padding: 20px;
-  }
-  .day-timeline > li {
-    gap: 10px;
-  }
-  .day-timeline > li:not(:last-child):after {
-    left: 64px;
-  }
-  .day-tabs {
-    gap: 6px;
-  }
-  .day-tabs button {
-    padding: 10px 7px;
-  }
-  .day-tabs strong {
-    font-size: 12px;
-  }
-  .day-tabs small {
-    font-size: 7px;
-  }
-  .day-tabs span {
-    font-size: 8px;
-  }
-  .field input,
-  .field select,
-  .field textarea {
-    font-size: 16px;
-    min-height: 42px;
-  }
-  .candidate-input .field input {
-    font-size: 14px;
-  }
-  .primary-action {
-    min-height: 45px;
-  }
-  .text-button {
-    min-height: 32px;
-  }
-}
-</style>
+<style scoped src="../styles/agent-workspace.css"></style>

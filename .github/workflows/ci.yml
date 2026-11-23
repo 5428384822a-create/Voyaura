@@ -88,5 +88,5 @@ jobs:
         with:
           name: browser-acceptance
           path: |
-            docs/design/round1/e2e.xml
-            docs/design/round1/flow-screenshots/
+            docs/design/round2/e2e.xml
+            docs/design/round2/flow-screenshots/

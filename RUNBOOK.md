@@ -51,7 +51,7 @@ npm audit --omit=dev
 api/.venv/Scripts/python.exe scripts/verify_e2e.py
 ```
 
-此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机8项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round1，旧Agent交付证据仍在docs/delivery。
+此运行器建立新的 `.local/e2e-随机编号/test.db` 和随机令牌，真实迁移、启动两个独立localhost子进程，执行桌面和手机10项Playwright测试，最后只停止自己创建的进程。**不读改个人profile数据库**。测试资料明确标为验收夹具，非真实旅行；不调用云API；不保存包含Authorization的网络trace。测试DB和服务日志留在忽略目录；当前前端改稿的JUnit与流程截图在docs/design/round2，第一轮材料保留于docs/design/round1，旧Agent交付证据仍在docs/delivery。
 
 本机已安装Chrome，可直接运行。没有Chrome时，在web运行 `npx playwright install chromium`，再设置 `$env:VOYAURA_E2E_CHANNEL='chromium'` 后执行运行器。Linux可用 `npx playwright install --with-deps chromium`。直接 `npm run test:e2e` 会连接指定的现有本地profile并写测试夹具，团队应优先使用隔离运行器。
 
@@ -78,3 +78,12 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 原城市记忆和新Agent档案位于不同表；保存计划不点亮城市。未确认故事来源变化会撤回，已确认快照独立保留。令牌清除只清浏览器副本；撤销本机访问需服务端更换令牌并重启。新任务中断后租约到期标失败，不自动重新收费；通过最近任务查看，必要时主动新建。
 
 本任务早期浏览器验收曾在任务创建的 `.local/voyaura.db` 写入明确样例；完整保留为测试证据，没有接触桌面个人数据。交付时默认profile已切换到新建 `.local/clean-start.db`，用户没有虚构足迹。后续使用隔离E2E运行器。媒体完整功能需要真实存储、扫描与worker，不能只凭UI判定可用。
+
+
+## 第二轮规划工作台
+
+当前产品入口 `/plan` 沿用第一轮A视觉。输入按三组展开，生成后以每日安排为默认；地点地图和执行记录是真实视图，可用方向键、Home、End切换。个人档案连接与明确保存确认不变。历史任务恢复后，编辑条件会带入该任务的原始输入，外部工具须重新授权。
+
+设计与真实截图：`docs/design/round2/index.html`（在本机浏览器中双击打开）、`overview.png`与`REVIEW.md`。截图审阅无需令牌；真实私人流程继续使用本机连接。
+
+只读输入截图：启动API和Web后在web执行 `node scripts/capture-plan-input.mjs`。脚本仅在本地填写表单并读取已有服务信息，不向个人档案写入任务；四尺寸检查发现横向溢出、图片失败、pageerror或任何API写请求时退出失败。结果页等截图由隔离E2E生成，勿使用个人profile作为回归夹具库。

@@ -1,6 +1,6 @@
 # Voyaura 工程协作规则
 
-- 本开发副本位于本任务目录，原始基线 cbdab47；Agent 工程交付基线 b525185。本轮分支 codex/competition-ui-round1，仅改发现首页、全局导航及规划意图衔接；不得修改桌面原仓库、其他任务、真实用户数据。
+- 本开发副本位于本任务目录，原始基线 cbdab47；Agent 工程交付基线 b525185。第一轮用户选择A的基线为69879b4；当前分支 codex/competition-ui-round2，改规划输入、真实执行状态与行程结果的响应式体验；不得修改桌面原仓库、其他任务、真实用户数据。
 - 用户已于2026-11-23采用第一轮方案A“清爽发现”：后续视觉沿用暖白底、橙红品牌、明亮摄影及当前导航体系；具体记录见 docs/design/round1/REVIEW.md。
 - 保留 Vue 3 / FastAPI / SQLAlchemy / PostgreSQL / Redis / MinIO 架构。SQLite 仅为明确标示的本地单机验证配置，不替代生产数据库。
 - 小曦使用显式状态机、白名单工具、独立约束验证和持久化调用事件。未知信息必须保持未知，不得将本地样例、模型文本或测试替身标记为在线事实。
@@ -15,5 +15,5 @@
 
 在 api：`python -m pytest -q`、`python -m ruff check app tests`、`python -m alembic upgrade head`。
 在 web：`npm ci`、`npm run test`、`npm run build`、`npm audit --omit=dev`。
-前端第一轮真实浏览器验收：在根目录执行 `api/.venv/Scripts/python.exe scripts/verify_e2e.py`；新建隔离测试库，报告位于 docs/design/round1，不向个人档案写入测试夹具。
+当前前端真实浏览器验收：在根目录执行 `api/.venv/Scripts/python.exe scripts/verify_e2e.py`；新建隔离测试库，报告位于 docs/design/round2，不向个人档案写入测试夹具。
 启动／端到端与数据库迁移验证命令在 RUNBOOK.md 随实现更新。所有命令结果记录于 PROGRESS.md 与 docs/delivery/TEST_REPORT.md。

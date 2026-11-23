@@ -1,7 +1,7 @@
 /** Real local HTTP + browser tests. All seeded content is explicitly labelled test input. No API mocks or cloud requests. */
 import { test, expect } from '@playwright/test'
 import type { Page, APIRequestContext } from '@playwright/test'
-import { readFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
@@ -23,7 +23,7 @@ async function post(request: APIRequestContext, path: string, data: object) {
   return response.json()
 }
 function screenshots() {
-  const path = new URL('../../docs/design/round1/flow-screenshots/', import.meta.url)
+  const path = new URL('../../docs/design/round2/flow-screenshots/', import.meta.url)
   mkdirSync(path, { recursive: true })
   return path
 }
@@ -41,6 +41,7 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
     .getByLabel('这次想怎样旅行？', { exact: true })
     .fill('[本地验收输入，非真实旅行] 两天轻松逛博物馆与公园')
   await page.getByLabel('出发日期', { exact: true }).fill('2026-12-01')
+  await page.locator('.candidate-input > summary').click()
   const candidates = [
     ['[验收输入] 博物馆A', '113.32', '23.11'],
     ['[验收输入] 公园B', '113.30', '23.12'],
@@ -56,22 +57,98 @@ test('行程：用户输入→真实规划→修改→主动确认→刷新恢�
   await page.getByRole('button', { name: '一起安排这段旅程', exact: true }).click()
   await expect(page.locator('.result-status')).toContainText('条件草案')
   await expect(page.locator('.day-tabs button')).toHaveCount(2)
+  await page.locator('.day-tabs button').nth(1).click()
+  await expect(page.locator('.day-heading')).toContainText('第 2 天')
+  await page.locator('.day-tabs button').first().click()
   await expect(page.locator('.day-timeline')).toContainText('你提供的地点')
   await expect(page.locator('.unknown-card')).toContainText('未知')
+  await page.getByRole('tab', { name: '地点地图', exact: true }).click()
   await expect(page.locator('.agent-map')).toContainText('非导航底图')
+  await page.getByRole('tab', { name: '每日安排', exact: true }).click()
   await page.locator('.replan-form input').fill('16:00')
   await page.getByRole('button', { name: '重新安排并检查', exact: true }).click()
   await expect(page.locator('.revision-label')).toContainText('2')
-  await page.locator('.result-heading').scrollIntoViewIfNeeded()
+  await page.locator('.replan-form input').blur()
+  await page
+    .locator('.workspace-scroll')
+    .evaluate((el) => el.scrollTo({ top: 0, behavior: 'instant' }))
   await page.screenshot({
-    path: fileURLToPath(new URL(`journey-${testInfo.project.name}.png`, screenshots())),
+    path: fileURLToPath(new URL(`overview-${testInfo.project.name}.png`, screenshots())),
   })
+  const originalViewport = page.viewportSize()!
+  const viewports =
+    testInfo.project.name === 'desktop'
+      ? ([
+          ['desktop', 1440, 1000],
+          ['tablet', 768, 1024],
+          ['narrow', 320, 812],
+        ] as const)
+      : ([['mobile', 390, 844]] as const)
+  const checks = []
+  for (const [name, width, height] of viewports) {
+    await page.setViewportSize({ width, height })
+    await page
+      .locator('.result-column')
+      .evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }))
+    const layout = await page.evaluate(() => {
+      const scroll = document.querySelector('.workspace-scroll')!
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        viewport: innerWidth,
+        scrollWidth: scroll.scrollWidth,
+        clientWidth: scroll.clientWidth,
+      }
+    })
+    expect(layout.scrollWidth, `result ${name} overflow`).toBeLessThanOrEqual(layout.clientWidth)
+    expect(layout.documentWidth).toBeLessThanOrEqual(width)
+    await page.screenshot({ path: fileURLToPath(new URL(`journey-${name}.png`, screenshots())) })
+    checks.push({ name, width, height, layout })
+  }
+  writeFileSync(
+    new URL(
+      `../../docs/design/round2/result-${testInfo.project.name}-viewport-check.json`,
+      import.meta.url,
+    ),
+    JSON.stringify(checks, null, 2),
+  )
+  await page.setViewportSize(originalViewport)
+  await page.getByRole('tab', { name: '地点地图', exact: true }).click()
+  await page
+    .locator('.result-column')
+    .evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }))
+  await expect(page.locator('.agent-map')).toBeVisible()
+  await page.screenshot({
+    path: fileURLToPath(new URL(`map-${testInfo.project.name}.png`, screenshots())),
+  })
+  await page.getByRole('tab', { name: /执行记录/ }).click()
+  await expect(page.locator('.execution-card')).toBeVisible()
+  expect(await page.locator('.execution-card li').count()).toBeGreaterThan(0)
+  await page
+    .locator('.execution-card')
+    .evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }))
+  await page.screenshot({
+    path: fileURLToPath(new URL(`execution-${testInfo.project.name}.png`, screenshots())),
+  })
+  // Keyboard switches the actual panels and moves focus together.
+  await page.getByRole('tab', { name: /执行记录/ }).focus()
+  await page.keyboard.press('Home')
+  await expect(page.getByRole('tab', { name: '每日安排', exact: true })).toBeFocused()
+  await expect(page.locator('#schedule-panel')).toBeVisible()
   await page.getByRole('button', { name: '核对并保存当前草案', exact: true }).click()
+  await expect(page.locator('.confirmation-card')).toBeFocused()
   const save = page.getByRole('button', { name: '确认保存到私人档案', exact: true })
   await expect(save).toBeDisabled()
+  await page
+    .locator('.confirmation-card')
+    .evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }))
+  await expect(save).toBeInViewport()
+  await page.screenshot({
+    path: fileURLToPath(new URL(`confirmation-${testInfo.project.name}.png`, screenshots())),
+  })
   await page.locator('.confirmation-card input[type=checkbox]').check()
   await save.click()
   await expect(page.locator('.saved-card')).toContainText('已妥善收藏')
+  await expect(page.locator('.workflow-steps [aria-current=step]')).toContainText('私人收藏')
   const after = await (await request.get(`${apiUrl}/map/overview`, { headers })).json()
   expect(after.stats).toEqual(before.stats)
   await page.reload()

@@ -185,7 +185,8 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     const missing = fixture()
     missing.status = 'needs_input'
     missing.result.verification_status = 'information_missing'
-    missing.result.days = []
+    // The real API can return empty day shells along with needs_input.
+    missing.result.days = [{ ...missing.result.days![0]!, stops: [] }]
     vi.mocked(api.createAgentRun).mockResolvedValue(missing)
     const wrapper = mount(AgentWorkspace)
     await flushPromises()
@@ -194,6 +195,7 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('信息不足')
     expect(wrapper.find('.save-preview').exists()).toBe(false)
+    expect(wrapper.find('form.travel-brief').isVisible()).toBe(true)
     expect(api.previewAgentConfirmation).not.toHaveBeenCalled()
   })
   it('中断任务缺少结果时展示刷新，不崩溃也不提供保存', async () => {
@@ -227,5 +229,146 @@ describe('小曦工作流交互边界（明确测试替身）', () => {
       'test-run',
       expect.objectContaining({ excluded_candidate_ids: ['previously-excluded', 'c1'] }),
     )
+  })
+  it('点选兴趣遵守最多三项，取消后可换选并提交真实表单值', async () => {
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await wrapper.find('textarea').setValue('测试兴趣与表单条件')
+    const interests = wrapper.find('[aria-label="旅行兴趣"]')
+    const option = (name: string) => interests.findAll('button').find((b) => b.text() === name)!
+    for (const name of ['博物馆', '美食', '海边']) await option(name).trigger('click')
+    expect(option('自然风光').attributes('disabled')).toBeDefined()
+    await option('博物馆').trigger('click')
+    expect(option('自然风光').attributes('disabled')).toBeUndefined()
+    await option('自然风光').trigger('click')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    expect(api.createAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        interests: ['美食', '海边', '自然风光'],
+        allow_external: false,
+        allow_model: false,
+      }),
+    )
+  })
+  it('每日安排、地图日期与执行记录切换展示各自真实内容', async () => {
+    const value = fixture()
+    value.result.days!.push({
+      ...value.result.days![0]!,
+      day: 2,
+      date: '2026-12-02',
+      stops: [{ ...value.result.days![0]!.stops[0]!, candidate_id: 'c2', name: '次日夹具地点' }],
+    })
+    vi.mocked(api.createAgentRun).mockResolvedValue(value)
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await wrapper.find('textarea').setValue('测试按天查看与地图切换')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    await wrapper.find('#map-tab').trigger('click')
+    expect(wrapper.find('#map-panel').isVisible()).toBe(true)
+    expect(wrapper.find('#schedule-panel').isVisible()).toBe(false)
+    expect(wrapper.find('.agent-map').text()).toContain('非导航底图')
+    await wrapper.findAll('.map-day-selector button')[1]!.trigger('click')
+    expect(wrapper.find('.map-stop-list').text()).toContain('次日夹具地点')
+    await wrapper.find('#schedule-tab').trigger('click')
+    expect(wrapper.find('.day-timeline').text()).toContain('次日夹具地点')
+    expect(wrapper.findAll('.day-timeline h3').map((h) => h.text())).toEqual(['次日夹具地点'])
+    await wrapper.find('#execution-tab').trigger('click')
+    expect(wrapper.find('.execution-card').isVisible()).toBe(true)
+    expect(wrapper.find('.execution-card').text()).toContain('暂未返回执行记录')
+  })
+  it('恢复历史任务后调整条件采用该任务输入，外部工具仍需重新授权', async () => {
+    const value = fixture()
+    value.status = 'confirmed'
+    let finish: (result: AgentRun) => void = () => {}
+    vi.mocked(api.createAgentRun).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    value.request = {
+      goal: '历史任务中的杭州计划',
+      city_adcode: '330100',
+      start_date: '2026-12-03',
+      days: 2,
+      daily_start: '10:00',
+      daily_end: '17:00',
+      budget_yuan: 200,
+      pace: 'balanced',
+      transport: 'walking',
+      interests: ['博物馆'],
+      must_visit: [],
+      allow_external: true,
+      allow_model: true,
+      candidates: [
+        {
+          name: '[测试夹具] 杭州地点',
+          longitude: 120.15,
+          latitude: 30.25,
+          stay_minutes: 45,
+          cost_yuan: null,
+        },
+      ],
+    }
+    vi.mocked(api.listAgentRuns).mockResolvedValue({ items: [value] })
+    vi.mocked(api.getAgentRun).mockResolvedValue(value)
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await button(wrapper, '最近任务').trigger('click')
+    await wrapper.find('.history-strip > button').trigger('click')
+    await flushPromises()
+    await button(wrapper, '调整旅行条件').trigger('click')
+    await flushPromises()
+    expect(wrapper.find<HTMLTextAreaElement>('[aria-label="这次想怎样旅行？"]').element.value).toBe(
+      '历史任务中的杭州计划',
+    )
+    expect(wrapper.find<HTMLSelectElement>('[aria-label="目的地"]').element.value).toBe('330100')
+    expect(wrapper.find<HTMLInputElement>('[aria-label="出发日期"]').element.value).toBe(
+      '2026-12-03',
+    )
+    expect(
+      wrapper.find<HTMLInputElement>('.permission-card input[type=checkbox]').element.checked,
+    ).toBe(false)
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('整理草案')
+    finish(fixture())
+    await flushPromises()
+    expect(api.createAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        city_adcode: '330100',
+        start_date: '2026-12-03',
+        daily_start: '10:00',
+        budget_yuan: 200,
+        transport: 'walking',
+        allow_external: false,
+        allow_model: false,
+        candidates: [expect.objectContaining({ name: '[测试夹具] 杭州地点', longitude: 120.15 })],
+      }),
+    )
+  })
+  it('等待真实请求时只显示等待状态，不把尚未返回的工具标记完成', async () => {
+    let finish: (value: AgentRun) => void = () => {}
+    vi.mocked(api.createAgentRun).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const wrapper = mount(AgentWorkspace)
+    await flushPromises()
+    await wrapper.find('textarea').setValue('测试等待中的真实边界')
+    await wrapper.find('form.travel-brief').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('正在等待本次任务结果')
+    expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('整理草案')
+    expect(wrapper.find('.execution-card').exists()).toBe(false)
+    expect(wrapper.find('.save-preview').exists()).toBe(false)
+    finish(fixture())
+    await flushPromises()
+    expect(wrapper.text()).toContain('条件草案')
+    expect(wrapper.find('.workflow-steps [aria-current=step]').text()).toContain('核对细节')
   })
 })
