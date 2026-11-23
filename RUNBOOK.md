@@ -67,7 +67,7 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 
 ## 第一轮前端预览与路由
 
-开发服务默认 A 清爽封面；`http://127.0.0.1:5188/?style=immersive` 可查看 B 摄影沉浸封面。该参数只在开发环境生效，生产构建默认 A；两版共用真实交互和照片。离线截图对比可打开 `docs/design/round1/index.html`。
+用户已于2026-11-23选择 A“清爽发现”，当前产品入口为 `http://127.0.0.1:5188/`，开发服务与生产构建默认均为 A。为复核原始设计对照，开发环境仍保留 `?style=immersive` 的 B 预览参数，两版共用真实交互和照片。离线截图对比与选择记录可打开 `docs/design/round1/index.html`。
 
 客户端路径为 `/`（发现）、`/plan`（计划）、`/journey/map`（旅程地图）、`/journey/stories`（旅行记忆）、`/studio`（创作）。当前“我的”打开真实本机档案连接窗口，不代表已经实现账户中心。服务须将非文件、非API的路径回退到 `index.html`，例如Nginx `location / { try_files $uri $uri/ /index.html; }`；API代理另行匹配。Vite开发和预览服务支持该回退，其他托管环境尚未部署验收。
 
