@@ -107,9 +107,34 @@ Provider 输出完成后使用 Pillow 写入这些文字。即使之后编辑城
 
 不要直接在 Navicat 中删除 `image_generation_jobs`：这样可能遗留 MinIO 生成图，也会绕过运行中保护、二次确认和幂等记录。应使用图片任务删除预览与确认接口。
 
+### trips 与 trip_days
+
+`trips` 保存一次正式旅行的城市、天数、日期、同行身份、节奏、兴趣、交通偏好、预算、
+每日时间窗和小曦需求快照。`user_id + client_request_id` 唯一约束用于防止 Apifox、网页或
+弱网重试产生重复行程。`trip_days` 按 `trip_id + day_number` 唯一，每次创建行程时根据天数
+生成空的每日结构。
+
+### itinerary_stops 与 meal_suggestions
+
+`itinerary_stops` 保存每天有顺序的景点、餐食、住宿或活动节点。模型提出但尚未经过高德
+核验的地点保持 `verification_status=unverified`，未知开放时间和票价保持 `NULL`。
+餐食是 `kind=meal` 的行程节点，`meal_suggestions` 通过唯一 `stop_id` 保存菜系、推荐菜、
+预算、饮食限制匹配和预约状态。
+
+### transfer_legs
+
+保存两个相邻行程节点之间的交通段，包括方式、距离、耗时、步行距离、费用、Provider、
+查询时间和路线快照。`verification_status=verified` 才表示使用了真实 Provider 路线结果；
+估算值必须保留为 `estimated`。
+
+### itinerary_evidence
+
+保存 POI、路线、开放时间、票价、天气和推荐理由的来源证据。记录 Provider、外部 ID、
+来源链接、查询时间、置信状态和当时的值快照，使行程中的事实可以追溯。
+
 ## 后续表计划
 
-- `trips`、`trip_days`、`trip_members`
+- `trip_members`
 - `pois`、`routes`、`weather_snapshots`
 - `vlogs`（若后续需要独立于 `media_assets` 的视频业务字段）
 - `generation_jobs`、`generated_assets`、`style_presets`

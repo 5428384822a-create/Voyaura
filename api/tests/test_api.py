@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,7 @@ from app.integrations.amap import (
     AMapRouteOption,
     AMapRouteStep,
     ResolvedCity,
+    build_amap_signature,
     get_amap_client,
 )
 from app.integrations.image_provider import (
@@ -40,9 +42,15 @@ from app.models import (
     CityMemory,
     CityVisit,
     ImageGenerationJob,
+    ItineraryEvidence,
+    ItineraryStop,
+    MealSuggestion,
     MediaAsset,
     MediaMutation,
     MemoryMutation,
+    TransferLeg,
+    Trip,
+    TripDay,
     User,
 )
 from app.xiaoxi_photo import compose_xiaoxi_photo
@@ -64,6 +72,15 @@ def override_get_db() -> Generator[Session, None, None]:
 
 
 app.dependency_overrides[get_db] = override_get_db
+
+
+def test_amap_signature_uses_sorted_raw_values() -> None:
+    params = {"output": "JSON", "keywords": "西湖", "key": "test-key"}
+    expected_source = "key=test-key&keywords=西湖&output=JSONtest-private-key"
+
+    signature = build_amap_signature(params, "test-private-key")
+
+    assert signature == hashlib.md5(expected_source.encode()).hexdigest()
 
 
 class FakeAMapClient:
@@ -304,6 +321,100 @@ def reset_database() -> Generator[None, None, None]:
 
 
 client = TestClient(app)
+
+
+def trip_payload(client_request_id: uuid.UUID | None = None) -> dict[str, object]:
+    return {
+        "username": "AuroraRovella",
+        "client_request_id": str(client_request_id or uuid.uuid4()),
+        "title": "杭州三日摄影行程",
+        "origin_city_name": "广州市",
+        "origin_city_adcode": "440100",
+        "destination_city_name": "杭州市",
+        "destination_city_adcode": "330100",
+        "start_date": "2026-12-01",
+        "day_count": 3,
+        "party_type": "solo",
+        "pace": "relaxed",
+        "interests": ["摄影", "历史"],
+        "transport_modes": ["transit", "walking"],
+        "dietary_constraints": [],
+        "total_budget_yuan": "3000.00",
+        "daily_start_time": "09:00:00",
+        "daily_end_time": "21:00:00",
+        "requirements_snapshot": {"source": "xiaoxi-planning-preview"},
+    }
+
+
+def test_cors_allows_default_vite_development_origin() -> None:
+    response = client.options(
+        "/api/v1/map/overview",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
+def test_create_trip_builds_empty_days_and_supports_list_and_detail() -> None:
+    response = client.post("/api/v1/trips", json=trip_payload())
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "created"
+    assert body["trip"]["destination_city_adcode"] == "330100"
+    assert body["trip"]["end_date"] == "2026-12-03"
+    assert [day["day_number"] for day in body["trip"]["days"]] == [1, 2, 3]
+    assert all(day["stops"] == [] for day in body["trip"]["days"])
+    trip_id = body["trip"]["id"]
+
+    detail = client.get(f"/api/v1/trips/{trip_id}?username=AuroraRovella")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == trip_id
+    assert detail.json()["requirements_snapshot"]["source"] == "xiaoxi-planning-preview"
+
+    listing = client.get("/api/v1/trips?username=AuroraRovella&status=draft")
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["title"] == "杭州三日摄影行程"
+
+    with TestingSession() as db:
+        assert db.scalar(select(func.count(Trip.id))) == 1
+        assert db.scalar(select(func.count(TripDay.id))) == 3
+        assert db.scalar(select(func.count(ItineraryStop.id))) == 0
+        assert db.scalar(select(func.count(MealSuggestion.id))) == 0
+        assert db.scalar(select(func.count(TransferLeg.id))) == 0
+        assert db.scalar(select(func.count(ItineraryEvidence.id))) == 0
+
+
+def test_create_trip_is_idempotent_and_rejects_changed_payload() -> None:
+    request_id = uuid.uuid4()
+    payload = trip_payload(request_id)
+
+    first = client.post("/api/v1/trips", json=payload)
+    repeated = client.post("/api/v1/trips", json=payload)
+    conflicting_payload = {**payload, "day_count": 4}
+    conflict = client.post("/api/v1/trips", json=conflicting_payload)
+
+    assert first.status_code == 201
+    assert repeated.status_code == 201
+    assert repeated.json()["status"] == "existing"
+    assert repeated.json()["trip"]["id"] == first.json()["trip"]["id"]
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "TRIP_IDEMPOTENCY_CONFLICT"
+
+
+def test_create_trip_rejects_an_invalid_daily_time_window() -> None:
+    payload = trip_payload()
+    payload["daily_start_time"] = "21:00:00"
+    payload["daily_end_time"] = "09:00:00"
+
+    response = client.post("/api/v1/trips", json=payload)
+
+    assert response.status_code == 422
 
 
 def create_memory_for_media() -> str:

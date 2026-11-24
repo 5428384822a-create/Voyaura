@@ -74,6 +74,13 @@ composition after provider generation. Until both
 disabled and the API rejects attempts to create a fake co-photo. See
 `docx/09-xiaoxi-photo-assets.md`.
 
+Xiaoxi's planning preview uses LangChain with DeepSeek structured output. The
+model extracts travel requirements and proposes hypotheses for later AMap POI
+verification; it never acts as the source of coordinates, opening hours,
+prices, or route feasibility. Configure the server-only DeepSeek key in
+`api/.env` and see `docx/12-deepseek-planning-checklist.md` for the staged
+candidate-search and clustering workflow.
+
 The Redis image comes from Amazon ECR's official Docker Library mirror. The
 MinIO image comes from Chainguard and is pinned by digest. These project-level
 sources avoid depending on a machine-wide Docker Hub mirror. If startup fails,

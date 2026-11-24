@@ -62,7 +62,7 @@
 
 | 错误代码 | 含义 | 处理方式 |
 |---|---|---|
-| `API_NETWORK_ERROR` | 浏览器无法连接 FastAPI | 确认 API 已启动、端口为 `8001`、CORS 配置正确 |
+| `API_NETWORK_ERROR` | 浏览器无法连接 FastAPI，或当前前端 Origin 未被 CORS 允许 | 确认 API 已启动、端口为 `8001`；默认 Vite `5173` 必须同时允许 `127.0.0.1` 与 `localhost`，修改后重启 API |
 | `VALIDATION_ERROR` | 请求参数不合法 | 查看 `details.fields` 中的字段与原因 |
 | `USER_NOT_FOUND` | 用户不存在 | 检查用户名或重新执行种子脚本 |
 | `CITY_NOT_FOUND` | `adcode` 对应城市不存在 | 检查城市编码和城市种子数据 |
@@ -73,6 +73,14 @@
 | `MEMORY_NOT_FOUND` | 目标记忆不存在、已删除或不属于当前用户/城市 | 刷新城市档案；不要对未知记忆重复生成新的删除请求 |
 | `MEMORY_MUTATION_IDEMPOTENCY_CONFLICT` | 编辑/删除请求编号被用于其他目标、操作或内容 | 保留原请求用于原操作，为新的变更生成新的请求编号 |
 | `INTERNAL_SERVER_ERROR` | 未捕获异常 | 使用 `request_id` 检索后端日志 |
+
+## 正式行程
+
+| 错误代码 | 含义 | 处理方式 |
+|---|---|---|
+| `TRIP_NOT_FOUND` | 行程不存在或不属于查询用户 | 核对 `trip_id` 和 `username`，不要跨用户读取行程 |
+| `TRIP_IDEMPOTENCY_CONFLICT` | 同一个 `client_request_id` 已用于内容不同的行程 | 原请求重试必须保持内容不变；新行程生成新的 UUID |
+| `VALIDATION_ERROR` | 行程天数、adcode、预算或每日时间窗不合法 | 检查 Apifox 的字段错误详情；结束时间必须晚于开始时间 |
 
 ## 媒体上传
 
@@ -183,4 +191,4 @@ cd api
 
 ## 当前已知阻塞
 
-截至 2026-11-12，本机高德 JS API、行政区图层和 Loca 2.0 已加载成功；点亮、POI 与路线 Web 服务请求仍返回 `10007 / INVALID_USER_SIGNATURE`。在高德控制台关闭该 Key 的“数字签名”，或把对应私钥写入 `api/.env` 后，重启 API 再验证点亮、地点搜索与路线规划。该错误当前会携带 CORS、`X-Request-ID`、高德 `infocode` 和可重试标记，前端会显示对应请求编号。
+截至 2026-11-14，高德 Web 服务签名 `10007` 和默认 Vite `5173` 的 API CORS 问题均已修复。仍需外部配置或真机验收的项目包括铁路/航班授权 Provider、ComfyUI 正式 workflow、小曦授权透明素材，以及手机定位、相机和弱网行为。

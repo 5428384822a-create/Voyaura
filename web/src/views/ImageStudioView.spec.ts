@@ -101,7 +101,7 @@ const {
   confirmImageJobDelete: vi.fn(),
 }))
 
-vi.mock('../api/client', () => ({
+vi.mock('../api', () => ({
   ApiClientError: class extends Error {},
   getImageJobs,
   getImageStyles,

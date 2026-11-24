@@ -1,8 +1,18 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.xiaoxi_planning import (
+    AttractionHypothesis,
+    Pace,
+    PartyType,
+    PlanningIntent,
+    PoiSearchTheme,
+    TransportMode,
+)
 
 
 class UserOut(BaseModel):
@@ -191,6 +201,260 @@ class RouteCapabilitiesOut(BaseModel):
     local: list[RouteProviderCapabilityOut]
     intercity: list[RouteProviderCapabilityOut]
     queried_at: datetime
+
+
+class XiaoxiPlanningContext(BaseModel):
+    city_name: str | None = Field(default=None, min_length=1, max_length=80)
+    city_adcode: str | None = Field(default=None, pattern=r"^\d{6}$")
+    day_count: int | None = Field(default=None, ge=1, le=14)
+    party_type: PartyType | None = None
+    pace: Pace | None = None
+    interests: list[str] | None = Field(default=None, max_length=12)
+    must_visit_names: list[str] | None = Field(default=None, max_length=20)
+    avoid_names: list[str] | None = Field(default=None, max_length=20)
+    dietary_constraints: list[str] | None = Field(default=None, max_length=12)
+    transport_modes: list[TransportMode] | None = Field(default=None, max_length=4)
+    daily_start_time: str | None = Field(
+        default=None,
+        pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$",
+    )
+    daily_end_time: str | None = Field(
+        default=None,
+        pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$",
+    )
+    total_budget_yuan: int | None = Field(default=None, ge=0, le=10_000_000)
+
+
+class XiaoxiPlanningPreviewDraft(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    username: str = Field(default="AuroraRovella", min_length=1, max_length=64)
+    message: str = Field(min_length=1, max_length=2_000)
+    context: XiaoxiPlanningContext = Field(default_factory=XiaoxiPlanningContext)
+
+
+class DailyAttractionRange(BaseModel):
+    min: int
+    max: int
+
+
+class XiaoxiPlanningCapabilityOut(BaseModel):
+    provider: Literal["deepseek"]
+    model: str
+    available: bool
+    state: Literal["available", "configuration_required"]
+    structured_output: Literal[True] = True
+    notice: str
+
+
+class XiaoxiPlanningPreviewOut(BaseModel):
+    status: Literal["needs_clarification", "ready_for_poi_search"]
+    assistant_message: str
+    requirements: PlanningIntent
+    city_adcode: str | None
+    missing_fields: list[str]
+    clarification_questions: list[str]
+    candidate_target_count: int
+    recommended_daily_attractions: DailyAttractionRange
+    attraction_hypotheses: list[AttractionHypothesis]
+    search_themes: list[PoiSearchTheme]
+    assumptions: list[str]
+    warnings: list[str]
+    provider: Literal["deepseek"]
+    model: str
+    generated_at: datetime
+
+
+TripStatus = Literal["draft", "confirmed", "planning", "ready", "archived"]
+
+
+class TripCreateDraft(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    username: str = Field(default="AuroraRovella", min_length=1, max_length=64)
+    client_request_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=160)
+    origin_city_name: str | None = Field(default=None, min_length=1, max_length=100)
+    origin_city_adcode: str | None = Field(default=None, pattern=r"^\d{6}$")
+    destination_city_name: str = Field(min_length=1, max_length=100)
+    destination_city_adcode: str = Field(pattern=r"^\d{6}$")
+    start_date: date | None = None
+    day_count: int = Field(ge=1, le=14)
+    timezone: str = Field(default="Asia/Shanghai", min_length=1, max_length=64)
+    party_type: PartyType = "unspecified"
+    pace: Pace = "unspecified"
+    interests: list[str] = Field(default_factory=list, max_length=12)
+    transport_modes: list[TransportMode] = Field(default_factory=list, max_length=4)
+    dietary_constraints: list[str] = Field(default_factory=list, max_length=12)
+    total_budget_yuan: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    daily_start_time: time | None = None
+    daily_end_time: time | None = None
+    requirements_snapshot: dict[str, object] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_daily_window(self) -> "TripCreateDraft":
+        if (
+            self.daily_start_time is not None
+            and self.daily_end_time is not None
+            and self.daily_end_time <= self.daily_start_time
+        ):
+            raise ValueError("daily_end_time must be later than daily_start_time")
+        return self
+
+
+class MealSuggestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    stop_id: uuid.UUID
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"]
+    cuisine_tags: list[str]
+    recommended_dishes: list[str]
+    budget_yuan: Decimal | None
+    dietary_match: Literal["unknown", "matched", "partial", "conflict"]
+    reservation_status: Literal["unknown", "not_required", "recommended", "required"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ItineraryStopOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    trip_day_id: uuid.UUID
+    sequence: int
+    kind: Literal["attraction", "meal", "lodging", "activity"]
+    name: str
+    poi_id: str | None
+    category: str | None
+    address: str | None
+    longitude: float | None
+    latitude: float | None
+    coordinate_system: Literal["GCJ02"] | None
+    start_time: time | None
+    end_time: time | None
+    suggested_duration_minutes: int | None
+    opening_status: Literal["unknown", "open", "closed", "needs_verification"]
+    opening_hours: str | None
+    ticket_price_yuan: Decimal | None
+    recommendation_reason: str | None
+    verification_status: Literal["unverified", "verified", "ambiguous", "not_found"]
+    status: Literal["planned", "confirmed", "skipped"]
+    source_queried_at: datetime | None
+    meal_suggestion: MealSuggestionOut | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TransferLegOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    trip_day_id: uuid.UUID
+    sequence: int
+    from_stop_id: uuid.UUID
+    to_stop_id: uuid.UUID
+    mode: Literal["walking", "transit", "driving", "taxi", "cycling", "train", "flight"]
+    provider: str | None
+    distance_meters: int | None
+    duration_seconds: int | None
+    walking_distance_meters: int | None
+    estimated_cost_yuan: Decimal | None
+    verification_status: Literal["estimated", "verified", "failed"]
+    queried_at: datetime | None
+    route_snapshot: dict[str, object] | None
+    created_at: datetime
+
+
+class TripDayOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    trip_id: uuid.UUID
+    day_number: int
+    travel_date: date | None
+    title: str | None
+    theme: str | None
+    lodging_area: str | None
+    status: Literal["draft", "planned", "confirmed"]
+    start_time: time | None
+    end_time: time | None
+    budget_yuan: Decimal | None
+    walking_intensity: Literal["unknown", "low", "moderate", "high"]
+    weather_snapshot: dict[str, object] | None
+    stops: list[ItineraryStopOut]
+    transfer_legs: list[TransferLegOut]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ItineraryEvidenceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    trip_id: uuid.UUID
+    stop_id: uuid.UUID | None
+    meal_suggestion_id: uuid.UUID | None
+    transfer_leg_id: uuid.UUID | None
+    evidence_type: Literal[
+        "poi", "route", "opening_hours", "ticket", "weather", "recommendation"
+    ]
+    provider: str
+    external_id: str | None
+    source_name: str
+    source_url: str | None
+    source_title: str | None
+    queried_at: datetime
+    confidence_status: Literal["unverified", "verified", "conflicting"]
+    value_snapshot: dict[str, object]
+    usage_note: str | None
+    created_at: datetime
+
+
+class TripSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    username: str
+    title: str
+    status: TripStatus
+    origin_city_name: str | None
+    origin_city_adcode: str | None
+    destination_city_name: str
+    destination_city_adcode: str
+    start_date: date | None
+    end_date: date | None
+    day_count: int
+    timezone: str
+    party_type: PartyType
+    pace: Pace
+    interests: list[str]
+    transport_modes: list[TransportMode]
+    total_budget_yuan: Decimal | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TripDetailOut(TripSummaryOut):
+    dietary_constraints: list[str]
+    daily_start_time: time | None
+    daily_end_time: time | None
+    requirements_snapshot: dict[str, object]
+    confirmed_at: datetime | None
+    days: list[TripDayOut]
+    evidence: list[ItineraryEvidenceOut]
+
+
+class TripCreateOut(BaseModel):
+    status: Literal["created", "existing"]
+    trip: TripDetailOut
+
+
+class TripListOut(BaseModel):
+    items: list[TripSummaryOut]
+    total: int
+    limit: int
+    offset: int
 
 
 class MediaAssetOut(BaseModel):

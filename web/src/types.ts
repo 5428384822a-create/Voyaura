@@ -187,6 +187,77 @@ export interface RouteCapabilities {
   queried_at: string
 }
 
+export type XiaoxiPartyType = 'solo' | 'couple' | 'friends' | 'family_children' | 'older_adults' | 'unspecified'
+export type XiaoxiPace = 'relaxed' | 'balanced' | 'rich' | 'unspecified'
+export type XiaoxiTransportMode = 'walking' | 'transit' | 'driving' | 'taxi'
+export type XiaoxiSearchCategory = 'culture_history' | 'museum_art' | 'nature_scenery' | 'photography' | 'family' | 'food' | 'shopping' | 'nightlife' | 'neighborhood' | 'other'
+
+export interface XiaoxiPlanningIntent {
+  city_name: string | null
+  day_count: number | null
+  party_type: XiaoxiPartyType
+  pace: XiaoxiPace
+  interests: string[]
+  must_visit_names: string[]
+  avoid_names: string[]
+  dietary_constraints: string[]
+  transport_modes: XiaoxiTransportMode[]
+  daily_start_time: string | null
+  daily_end_time: string | null
+  total_budget_yuan: number | null
+}
+
+export interface XiaoxiPlanningContext extends Partial<XiaoxiPlanningIntent> {
+  city_adcode?: string | null
+}
+
+export interface XiaoxiPlanningPreviewDraft {
+  username?: string
+  message: string
+  context?: XiaoxiPlanningContext
+}
+
+export interface XiaoxiPlanningCapability {
+  provider: 'deepseek'
+  model: string
+  available: boolean
+  state: 'available' | 'configuration_required'
+  structured_output: true
+  notice: string
+}
+
+export interface XiaoxiAttractionHypothesis {
+  name: string
+  category: XiaoxiSearchCategory
+  reason: string
+  priority: number
+}
+
+export interface XiaoxiPoiSearchTheme {
+  keyword: string
+  category: XiaoxiSearchCategory
+  reason: string
+  desired_count: number
+}
+
+export interface XiaoxiPlanningPreview {
+  status: 'needs_clarification' | 'ready_for_poi_search'
+  assistant_message: string
+  requirements: XiaoxiPlanningIntent
+  city_adcode: string | null
+  missing_fields: string[]
+  clarification_questions: string[]
+  candidate_target_count: number
+  recommended_daily_attractions: { min: number, max: number }
+  attraction_hypotheses: XiaoxiAttractionHypothesis[]
+  search_themes: XiaoxiPoiSearchTheme[]
+  assumptions: string[]
+  warnings: string[]
+  provider: 'deepseek'
+  model: string
+  generated_at: string
+}
+
 export interface MemoryMediaAsset {
   id: string
   kind: 'photo' | 'vlog'
@@ -562,6 +633,171 @@ export interface AppErrorInfo {
   details: Record<string, unknown>
   retryable: boolean
   requestId?: string
+}
+
+export type TripStatus = 'draft' | 'confirmed' | 'planning' | 'ready' | 'archived'
+
+export interface TripCreateDraft {
+  username?: string
+  client_request_id: string
+  title: string
+  origin_city_name?: string | null
+  origin_city_adcode?: string | null
+  destination_city_name: string
+  destination_city_adcode: string
+  start_date?: string | null
+  day_count: number
+  timezone?: string
+  party_type?: XiaoxiPartyType
+  pace?: XiaoxiPace
+  interests?: string[]
+  transport_modes?: XiaoxiTransportMode[]
+  dietary_constraints?: string[]
+  total_budget_yuan?: string | null
+  daily_start_time?: string | null
+  daily_end_time?: string | null
+  requirements_snapshot?: Record<string, unknown>
+}
+
+export interface MealSuggestion {
+  id: string
+  stop_id: string
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  cuisine_tags: string[]
+  recommended_dishes: string[]
+  budget_yuan: string | null
+  dietary_match: 'unknown' | 'matched' | 'partial' | 'conflict'
+  reservation_status: 'unknown' | 'not_required' | 'recommended' | 'required'
+  created_at: string
+  updated_at: string
+}
+
+export interface ItineraryStop {
+  id: string
+  trip_day_id: string
+  sequence: number
+  kind: 'attraction' | 'meal' | 'lodging' | 'activity'
+  name: string
+  poi_id: string | null
+  category: string | null
+  address: string | null
+  longitude: number | null
+  latitude: number | null
+  coordinate_system: 'GCJ02' | null
+  start_time: string | null
+  end_time: string | null
+  suggested_duration_minutes: number | null
+  opening_status: 'unknown' | 'open' | 'closed' | 'needs_verification'
+  opening_hours: string | null
+  ticket_price_yuan: string | null
+  recommendation_reason: string | null
+  verification_status: 'unverified' | 'verified' | 'ambiguous' | 'not_found'
+  status: 'planned' | 'confirmed' | 'skipped'
+  source_queried_at: string | null
+  meal_suggestion: MealSuggestion | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TransferLeg {
+  id: string
+  trip_day_id: string
+  sequence: number
+  from_stop_id: string
+  to_stop_id: string
+  mode: 'walking' | 'transit' | 'driving' | 'taxi' | 'cycling' | 'train' | 'flight'
+  provider: string | null
+  distance_meters: number | null
+  duration_seconds: number | null
+  walking_distance_meters: number | null
+  estimated_cost_yuan: string | null
+  verification_status: 'estimated' | 'verified' | 'failed'
+  queried_at: string | null
+  route_snapshot: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface TripDay {
+  id: string
+  trip_id: string
+  day_number: number
+  travel_date: string | null
+  title: string | null
+  theme: string | null
+  lodging_area: string | null
+  status: 'draft' | 'planned' | 'confirmed'
+  start_time: string | null
+  end_time: string | null
+  budget_yuan: string | null
+  walking_intensity: 'unknown' | 'low' | 'moderate' | 'high'
+  weather_snapshot: Record<string, unknown> | null
+  stops: ItineraryStop[]
+  transfer_legs: TransferLeg[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ItineraryEvidence {
+  id: string
+  trip_id: string
+  stop_id: string | null
+  meal_suggestion_id: string | null
+  transfer_leg_id: string | null
+  evidence_type: 'poi' | 'route' | 'opening_hours' | 'ticket' | 'weather' | 'recommendation'
+  provider: string
+  external_id: string | null
+  source_name: string
+  source_url: string | null
+  source_title: string | null
+  queried_at: string
+  confidence_status: 'unverified' | 'verified' | 'conflicting'
+  value_snapshot: Record<string, unknown>
+  usage_note: string | null
+  created_at: string
+}
+
+export interface TripSummary {
+  id: string
+  username: string
+  title: string
+  status: TripStatus
+  origin_city_name: string | null
+  origin_city_adcode: string | null
+  destination_city_name: string
+  destination_city_adcode: string
+  start_date: string | null
+  end_date: string | null
+  day_count: number
+  timezone: string
+  party_type: XiaoxiPartyType
+  pace: XiaoxiPace
+  interests: string[]
+  transport_modes: XiaoxiTransportMode[]
+  total_budget_yuan: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TripDetail extends TripSummary {
+  dietary_constraints: string[]
+  daily_start_time: string | null
+  daily_end_time: string | null
+  requirements_snapshot: Record<string, unknown>
+  confirmed_at: string | null
+  days: TripDay[]
+  evidence: ItineraryEvidence[]
+}
+
+export interface TripCreateResult {
+  status: 'created' | 'existing'
+  trip: TripDetail
+}
+
+export interface TripList {
+  items: TripSummary[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface MapIssue {

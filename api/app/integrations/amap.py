@@ -29,9 +29,16 @@ AMAP_ERROR_MAP: dict[str, tuple[str, str, bool]] = {
     "10009": ("AMAP_PLATFORM_MISMATCH", "高德 Key 类型与 Web 服务接口不匹配。", False),
     "10012": ("AMAP_INSUFFICIENT_PRIVILEGES", "高德 Key 权限不足。", False),
     "10016": ("AMAP_SERVER_BUSY", "高德服务负载较高，请稍后重试。", True),
+    "10021": ("AMAP_RATE_LIMIT", "高德服务调用频率超过当前账号限制。", True),
     "20000": ("AMAP_INVALID_PARAMS", "高德服务拒绝了无效参数。", False),
     "20011": ("AMAP_OUTSIDE_CHINA", "当前位置不在高德境内服务范围内。", False),
 }
+
+
+def build_amap_signature(params: dict[str, str], private_key: str) -> str:
+    # AMap signs sorted raw parameter values; URL encoding is only applied by HTTP transport.
+    signature_source = "&".join(f"{key}={value}" for key, value in sorted(params.items()))
+    return hashlib.md5(f"{signature_source}{private_key}".encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -286,10 +293,7 @@ class AMapClient:
     def _request(self, path: str, params: dict[str, str]) -> dict[str, Any]:
         request_params = {**params, "key": self.key, "output": "JSON"}
         if self.private_key:
-            signature_source = urlencode(sorted(request_params.items()), safe=",")
-            request_params["sig"] = hashlib.md5(
-                f"{signature_source}{self.private_key}".encode()
-            ).hexdigest()
+            request_params["sig"] = build_amap_signature(request_params, self.private_key)
 
         try:
             response = httpx.get(

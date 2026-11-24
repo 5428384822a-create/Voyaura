@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, MessageCircle, Send, Sparkles, X } from 'lucide-vue-next'
+import { AlertTriangle, Bell, LoaderCircle, MessageCircle, Send, Sparkles, X } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import {
   ApiClientError,
@@ -26,10 +26,11 @@ import {
   previewMediaUpload,
   previewImageJob,
   previewManualCheckIn,
+  previewXiaoxiPlanning,
   previewMediaDelete,
   searchPois,
   uploadMediaFile,
-} from './api/client'
+} from './api'
 import AppNavigation from './components/AppNavigation.vue'
 import CheckInDialog from './components/CheckInDialog.vue'
 import CityMemoryPanel from './components/CityMemoryPanel.vue'
@@ -71,6 +72,7 @@ import type {
   PoiSearchDraft,
   PoiSearchResult,
   VisitedCity,
+  XiaoxiPlanningPreview,
 } from './types'
 import EmptyView from './views/EmptyView.vue'
 import ImageStudioView from './views/ImageStudioView.vue'
@@ -82,6 +84,14 @@ const overview = ref<MapOverview>(emptyOverview)
 const apiConnected = ref(false)
 const xiaoxiOpen = ref(false)
 const composer = ref('')
+const xiaoxiPhase = ref<'idle' | 'loading' | 'error'>('idle')
+const xiaoxiError = ref<AppErrorInfo | null>(null)
+const xiaoxiEntries = ref<Array<{
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  preview?: XiaoxiPlanningPreview
+}>>([])
 const checkInPhase = ref<'idle' | 'locating' | 'manual' | 'preview' | 'confirming' | 'success' | 'error'>('idle')
 const checkInPayload = ref<CheckInCoordinates | ManualCityCheckIn | null>(null)
 const checkInPreview = ref<CheckInPreview | null>(null)
@@ -408,10 +418,47 @@ function openXiaoxi() {
   xiaoxiOpen.value = true
 }
 
+function selectAppView(view: AppView) {
+  activeView.value = view
+  xiaoxiOpen.value = false
+  selectedCity.value = null
+}
+
 function askXiaoxiAboutCity(city: VisitedCity) {
   closeCityMemory()
   xiaoxiOpen.value = true
   composer.value = `小曦，带我回顾在${city.name_zh}的旅行记忆。`
+}
+
+async function submitXiaoxiMessage() {
+  const message = composer.value.trim()
+  if (!message || xiaoxiPhase.value === 'loading') return
+  xiaoxiEntries.value.push({ id: crypto.randomUUID(), role: 'user', text: message })
+  composer.value = ''
+  xiaoxiPhase.value = 'loading'
+  xiaoxiError.value = null
+  const transcript = xiaoxiEntries.value
+    .filter(entry => entry.role === 'user')
+    .slice(-6)
+    .map((entry, index) => `第 ${index + 1} 次补充：${entry.text}`)
+    .join('\n')
+    .slice(-2_000)
+  try {
+    const preview = await previewXiaoxiPlanning({
+      username: 'AuroraRovella',
+      message: transcript,
+    })
+    xiaoxiEntries.value.push({
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      text: preview.assistant_message,
+      preview,
+    })
+    xiaoxiPhase.value = 'idle'
+  } catch (error) {
+    xiaoxiError.value = normalizeError(error)
+    xiaoxiPhase.value = 'error'
+  }
 }
 
 function openMemoryComposer(city: VisitedCity) {
@@ -1026,8 +1073,8 @@ async function confirmMediaUpload() {
 <template>
   <div class="app-shell">
     <aside class="brand-rail">
-      <button class="brand-mark" type="button" title="Voyaura 地图" aria-label="Voyaura 地图" @click="activeView = 'map'">V</button>
-      <AppNavigation :active-view="activeView" @select="activeView = $event" />
+      <button class="brand-mark" type="button" title="Voyaura 地图" aria-label="Voyaura 地图" @click="selectAppView('map')">V</button>
+      <AppNavigation :active-view="activeView" @select="selectAppView" />
       <button class="notification-button" type="button" title="通知" aria-label="通知"><Bell :size="20" /></button>
       <span class="avatar" title="AuroraRovella">AR</span>
     </aside>
@@ -1046,12 +1093,12 @@ async function confirmMediaUpload() {
     <JourneyPlannerView
       v-else-if="activeView === 'journeys'"
       :overview="overview"
-      @back="activeView = 'map'"
+      @back="selectAppView('map')"
     />
-    <ImageStudioView v-else-if="activeView === 'studio'" @back="activeView = 'map'" />
-    <EmptyView v-else :view="activeView" @back="activeView = 'map'" />
+    <ImageStudioView v-else-if="activeView === 'studio'" @back="selectAppView('map')" />
+    <EmptyView v-else :view="activeView" @back="selectAppView('map')" />
 
-    <AppNavigation class="mobile-nav" :active-view="activeView" @select="activeView = $event" />
+    <AppNavigation class="mobile-nav" :active-view="activeView" @select="selectAppView" />
 
     <Transition name="dialog">
       <CheckInDialog
@@ -1194,21 +1241,56 @@ async function confirmMediaUpload() {
           <button type="button" title="关闭" aria-label="关闭" @click="xiaoxiOpen = false"><X :size="20" /></button>
         </header>
         <div class="chat-body">
-          <p class="date-stamp">NOV · 10 · 2026</p>
+          <p class="date-stamp">TRAVEL PLANNING PREVIEW</p>
           <div class="xiaoxi-message">
             <span>曦</span>
-            <p>晚上好，Aurora。今天想去哪里，还是要把刚刚抵达的城市收藏起来？</p>
+            <p>告诉我目的城市、天数和旅行偏好。我会先整理候选，再交给高德核验位置与路线。</p>
           </div>
           <div class="chat-suggestions">
-            <button type="button" @click="composer = '帮我规划一个三天两夜的城市旅程'">规划新旅程</button>
-            <button type="button" @click="composer = '介绍一下我现在所在的城市'">认识这座城</button>
-            <button type="button" @click="composer = '帮我整理今天拍摄的照片'">整理旅行照片</button>
+            <button type="button" @click="composer = '帮我规划杭州三天的独自摄影旅行，节奏轻松，公共交通为主'">杭州摄影三日</button>
+            <button type="button" @click="composer = '帮我规划广州两天的美食与历史街区旅行'">广州美食两日</button>
+            <button type="button" @click="composer = '我想带父母旅行，但还没决定城市'">长辈同行</button>
+          </div>
+          <template v-for="entry in xiaoxiEntries" :key="entry.id">
+            <div v-if="entry.role === 'user'" class="chat-user-message"><p>{{ entry.text }}</p></div>
+            <div v-else class="xiaoxi-message chat-result">
+              <span>曦</span>
+              <div class="xiaoxi-result-body">
+                <p>{{ entry.text }}</p>
+                <template v-if="entry.preview">
+                  <div v-if="entry.preview.status === 'ready_for_poi_search'" class="planning-preview-summary">
+                    <strong>{{ entry.preview.requirements.city_name }} · {{ entry.preview.requirements.day_count }} 天</strong>
+                    <small>候选池 {{ entry.preview.candidate_target_count }} 个 · 每日建议 {{ entry.preview.recommended_daily_attractions.min }}–{{ entry.preview.recommended_daily_attractions.max }} 个景点</small>
+                  </div>
+                  <ul v-if="entry.preview.attraction_hypotheses.length" class="planning-hypotheses">
+                    <li v-for="item in entry.preview.attraction_hypotheses.slice(0, 6)" :key="item.name">
+                      <strong>{{ item.name }}</strong><small>{{ item.reason }}</small>
+                    </li>
+                  </ul>
+                  <div v-if="entry.preview.search_themes.length" class="planning-search-themes">
+                    <span v-for="theme in entry.preview.search_themes" :key="theme.keyword">{{ theme.keyword }}</span>
+                  </div>
+                  <div v-if="entry.preview.clarification_questions.length" class="planning-questions">
+                    <strong>还需要确认</strong>
+                    <p v-for="question in entry.preview.clarification_questions" :key="question">{{ question }}</p>
+                  </div>
+                  <p class="planning-warning"><AlertTriangle :size="13" />{{ entry.preview.warnings[0] }}</p>
+                </template>
+              </div>
+            </div>
+          </template>
+          <div v-if="xiaoxiPhase === 'loading'" class="xiaoxi-loading" aria-live="polite">
+            <LoaderCircle class="spin" :size="18" />小曦正在整理结构化需求
+          </div>
+          <div v-if="xiaoxiError" class="xiaoxi-chat-error" role="alert">
+            <AlertTriangle :size="17" />
+            <div><strong>{{ xiaoxiError.message }}</strong><code>{{ xiaoxiError.code }}</code><small v-if="xiaoxiError.code === 'DEEPSEEK_KEY_MISSING'">请在 api/.env 配置 VOYAURA_DEEPSEEK_API_KEY 后重启 API。</small></div>
           </div>
         </div>
-        <form class="chat-composer" @submit.prevent="composer = ''">
+        <form class="chat-composer" @submit.prevent="submitXiaoxiMessage">
           <MessageCircle :size="18" />
-          <input v-model="composer" aria-label="给小曦发消息" placeholder="问问小曦..." />
-          <button type="submit" title="发送" aria-label="发送"><Send :size="18" /></button>
+          <input v-model="composer" aria-label="给小曦发消息" placeholder="例如：杭州三天，独自摄影..." :disabled="xiaoxiPhase === 'loading'" />
+          <button type="submit" title="发送" aria-label="发送" :disabled="!composer.trim() || xiaoxiPhase === 'loading'"><Send :size="18" /></button>
         </form>
       </aside>
     </Transition>

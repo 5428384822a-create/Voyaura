@@ -8,11 +8,21 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://voyaura:voyaura_dev_only@127.0.0.1:5433/voyaura"
     )
-    cors_origins: str = "http://127.0.0.1:5174,http://localhost:5174"
+    cors_origins: str = (
+        "http://127.0.0.1:5173,http://localhost:5173,"
+        "http://127.0.0.1:5174,http://localhost:5174,"
+        "http://127.0.0.1:5175,http://localhost:5175"
+    )
     amap_web_key: str = ""
     amap_web_private_key: str = ""
     amap_js_key: str = ""
     amap_security_code: str = ""
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_temperature: float = 0.1
+    deepseek_timeout_seconds: float = 30.0
+    deepseek_max_retries: int = 2
     minio_endpoint: str = "127.0.0.1:9000"
     minio_access_key: str = "voyaura"
     minio_secret_key: str = "voyaura_minio_dev_only"

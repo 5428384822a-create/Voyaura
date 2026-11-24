@@ -36,7 +36,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-voyaura}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-voyaura_minio_dev_only}
-      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ALLOW_ORIGIN:-http://127.0.0.1:5174,http://localhost:5174}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ALLOW_ORIGIN:-http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174,http://127.0.0.1:5175,http://localhost:5175}
     ports:
       - "${MINIO_API_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"

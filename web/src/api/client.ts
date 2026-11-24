@@ -40,6 +40,9 @@ import type {
   LocalRouteDraft,
   LocalRouteResult,
   RouteCapabilities,
+  XiaoxiPlanningPreview,
+  XiaoxiPlanningPreviewDraft,
+  XiaoxiPlanningCapability,
 } from '../types'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8001/api/v1'
@@ -126,6 +129,19 @@ export function getRouteCapabilities(): Promise<RouteCapabilities> {
 
 export function planLocalRoute(payload: LocalRouteDraft): Promise<LocalRouteResult> {
   return request('/tools/routes/plan', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function previewXiaoxiPlanning(
+  payload: XiaoxiPlanningPreviewDraft,
+): Promise<XiaoxiPlanningPreview> {
+  return request('/xiaoxi/planning/preview', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getXiaoxiPlanningCapability(): Promise<XiaoxiPlanningCapability> {
+  return request('/xiaoxi/planning/capability')
 }
 
 export function previewCheckIn(payload: CheckInCoordinates): Promise<CheckInPreview> {

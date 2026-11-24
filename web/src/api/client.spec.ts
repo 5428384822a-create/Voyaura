@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { uploadMediaFile } from './client'
+import { uploadMediaFile } from './media'
 import type { MediaUploadIntent } from '../types'
 
 class FakeXMLHttpRequest {

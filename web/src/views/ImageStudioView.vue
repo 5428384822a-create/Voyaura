@@ -18,7 +18,7 @@ import {
   getImageStyles,
   previewImageJobDelete,
   setImageJobFavorite,
-} from '../api/client'
+} from '../api'
 import ImageCompareSlider from '../components/ImageCompareSlider.vue'
 import ImageJobDeleteDialog from '../components/ImageJobDeleteDialog.vue'
 import type {
