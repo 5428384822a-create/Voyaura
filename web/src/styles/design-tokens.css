@@ -1,0 +1,72 @@
+:root {
+  --font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-brand: 30px;
+  --font-label: 0.75rem;
+  --font-secondary: 0.875rem;
+  --font-body: 1rem;
+  --font-card: 1.125rem;
+  --font-section: 1.375rem;
+  --font-title: 1.875rem;
+  --font-display: 3.5rem;
+  --line-body: 1.75;
+  --line-heading: 1.35;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --canvas: #faf9f6;
+  --surface: #fffefb;
+  --surface-soft: #f2f0e8;
+  --text-primary: #23352b;
+  --text-body: #39483f;
+  --text-secondary: #606b61;
+  --brand-accent: #e76840;
+  --action: #b94a2d;
+  --action-hover: #a53c24;
+  --action-soft: #fff0e8;
+  --success: #2f6b49;
+  --success-soft: #edf6ee;
+  --warning: #8a5b12;
+  --warning-soft: #fff5df;
+  --danger: #b4232f;
+  --danger-soft: #fff0f0;
+  --border-subtle: #e6e3da;
+  --border-control: #7d897f;
+  --focus: #a54023;
+  --radius-control: 6px;
+  --radius-surface: 10px;
+  --radius-photo: 16px;
+  --shadow-float: 0 12px 36px #23352b24;
+  --product-header-height: 72px;
+  --product-bottom-height: 0px;
+  /* Compatibility names while existing layouts migrate to semantic tokens. */
+  --page-bg: var(--canvas);
+  --paper: var(--surface);
+  --paper-deep: var(--surface-soft);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--border-subtle);
+  --brand-orange: var(--brand-accent);
+  --brand-ink-orange: var(--action);
+  --brand-button: var(--action);
+  --coral: var(--action);
+  --coral-dark: var(--action);
+  --green: var(--success);
+  --shadow: var(--shadow-float);
+  font-family: var(--font-family);
+  font-size: 16px;
+  color: var(--text-body);
+}
+@media (max-width: 899px) {
+  :root {
+    --font-brand: 28px;
+    --font-display: 2.25rem;
+    --font-title: 1.75rem;
+    --product-header-height: 64px;
+    --product-bottom-height: calc(68px + env(safe-area-inset-bottom));
+  }
+}

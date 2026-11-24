@@ -17,6 +17,25 @@ const city: VisitedCity = {
 }
 
 describe('MemoryComposerDialog', () => {
+  it('正文编辑与预览保留未提交状态，确认成功后解除离开保护', async () => {
+    const wrapper = mount(MemoryComposerDialog, {
+      props: {
+        city,
+        mode: 'create',
+        initialMemory: null,
+        phase: 'editing',
+        preview: null,
+        error: null,
+      },
+    })
+    await wrapper.get('textarea').setValue('明确的本地测试文字')
+    expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([true])
+    await wrapper.setProps({ phase: 'preview' })
+    expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([true])
+    await wrapper.setProps({ phase: 'success' })
+    expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([false])
+    wrapper.unmount()
+  })
   it('collects a private text memory for preview', async () => {
     const wrapper = mount(MemoryComposerDialog, {
       props: {
@@ -29,11 +48,16 @@ describe('MemoryComposerDialog', () => {
       },
     })
 
-    await wrapper.get('input[placeholder="给这段记忆一个名字"]').setValue('珠江边的晚风')
+    await wrapper
+      .get('input[placeholder="给这段记忆一个名字"]')
+      .setValue('珠江边的晚风')
     await wrapper.get('textarea').setValue('记下当时的风。')
     await wrapper.get('form').trigger('submit')
 
-    const input = wrapper.emitted('preview')?.[0]?.[0] as Record<string, unknown>
+    const input = wrapper.emitted('preview')?.[0]?.[0] as Record<
+      string,
+      unknown
+    >
     expect(input.title).toBe('珠江边的晚风')
     expect(input.body).toBe('记下当时的风。')
     expect(input.visibility).toBe('private')
@@ -82,9 +106,19 @@ describe('MemoryComposerDialog', () => {
       },
     })
 
-    expect((wrapper.get('input[placeholder="给这段记忆一个名字"]').element as HTMLInputElement).value).toBe('沙面散步')
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('树影落在旧建筑上。')
-    expect((wrapper.get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(true)
+    expect(
+      (
+        wrapper.get('input[placeholder="给这段记忆一个名字"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe('沙面散步')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(
+      '树影落在旧建筑上。',
+    )
+    expect(
+      (wrapper.get('input[type="checkbox"]').element as HTMLInputElement)
+        .checked,
+    ).toBe(true)
     expect(wrapper.text()).toContain('预览修改')
   })
 })

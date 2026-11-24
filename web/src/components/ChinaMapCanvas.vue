@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import AMapLoader from '@amap/amap-jsapi-loader'
-import { AlertTriangle, LoaderCircle, LocateFixed, Minus, Plus, RefreshCw } from 'lucide-vue-next'
+import {
+  AlertTriangle,
+  Compass,
+  LoaderCircle,
+  LocateFixed,
+  Minus,
+  Plus,
+  RefreshCw,
+} from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { MapIssue, MapOverview, VisitedCity } from '../types'
 
@@ -32,7 +40,10 @@ let countryLayer: AMap.TileLayer | null = null
 let cityMarkers: AMap.Marker[] = []
 let focusMarker: AMap.Marker | null = null
 let focusCircle: AMap.Circle | null = null
-let locaContainer: InstanceType<NonNullable<Window['Loca']>['Container']> | null = null
+let locaContainer: InstanceType<
+  NonNullable<Window['Loca']>['Container']
+> | null = null
+let loadGeneration = 0
 
 function setIssue(issue: MapIssue | null) {
   mapIssue.value = issue
@@ -76,11 +87,17 @@ function renderCityPoints() {
   locaContainer?.destroy()
   locaContainer = null
 
-  const features: GeoJSON.Feature[] = props.overview.visited_cities.map((city) => ({
-    type: 'Feature',
-    properties: { adcode: city.adcode, name: city.name_zh, memories: city.memory_count },
-    geometry: { type: 'Point', coordinates: [city.longitude, city.latitude] },
-  }))
+  const features: GeoJSON.Feature[] = props.overview.visited_cities.map(
+    (city) => ({
+      type: 'Feature',
+      properties: {
+        adcode: city.adcode,
+        name: city.name_zh,
+        memories: city.memory_count,
+      },
+      geometry: { type: 'Point', coordinates: [city.longitude, city.latitude] },
+    }),
+  )
 
   if (features.length && window.Loca) {
     try {
@@ -151,12 +168,16 @@ function renderFocusPoint() {
     fillColor: '#e9583e',
     fillOpacity: 0.12,
   })
-  focusMarker = new amap.Marker({ position: props.focusPoint, anchor: 'bottom-center' })
+  focusMarker = new amap.Marker({
+    position: props.focusPoint,
+    anchor: 'bottom-center',
+  })
   map.add([focusCircle, focusMarker])
   map.setZoomAndCenter(11, props.focusPoint)
 }
 
 async function loadMap() {
+  const generation = ++loadGeneration
   const key = import.meta.env.VITE_AMAP_KEY?.trim()
   const securityCode = import.meta.env.VITE_AMAP_SECURITY_CODE?.trim()
   if (!key || !securityCode) {
@@ -164,7 +185,8 @@ async function loadMap() {
     setIssue({
       code: 'AMAP_CONFIG_MISSING',
       message: '高德前端地图配置不完整。',
-      suggestion: '请检查 web/.env.local 中的 JS API Key 与 securityJsCode，然后重启前端。',
+      suggestion:
+        '请检查 web/.env.local 中的 JS API Key 与 securityJsCode，然后重启前端。',
     })
     return
   }
@@ -175,13 +197,14 @@ async function loadMap() {
   window._AMapSecurityConfig = { securityJsCode: securityCode }
 
   try {
-    amap = (await AMapLoader.load({
+    const runtime = (await AMapLoader.load({
       key,
       version: '2.0',
       plugins: ['AMap.ToolBar', 'AMap.DistrictLayer'],
       Loca: { version: '2.0.0' },
     })) as AMapRuntime
-    if (!mapHost.value) return
+    if (generation !== loadGeneration || !mapHost.value) return
+    amap = runtime
 
     map = new amap.Map(mapHost.value, {
       center: props.overview.map_center,
@@ -195,6 +218,7 @@ async function loadMap() {
     renderFocusPoint()
     mapStatus.value = 'ready'
   } catch (error) {
+    if (generation !== loadGeneration) return
     const detail = error instanceof Error ? error.message : 'unknown'
     mapStatus.value = 'error'
     setIssue({
@@ -213,43 +237,92 @@ watch(() => props.overview.visited_cities, renderCityPoints, { deep: true })
 watch(() => props.focusPoint, renderFocusPoint, { deep: true })
 
 onMounted(loadMap)
-onBeforeUnmount(destroyMap)
+onBeforeUnmount(() => {
+  loadGeneration += 1
+  destroyMap()
+})
 </script>
 
 <template>
   <section class="map-canvas" aria-label="中国旅行地图">
-    <div ref="mapHost" class="amap-host" :class="{ visible: mapStatus === 'ready' }"></div>
+    <div
+      ref="mapHost"
+      class="amap-host"
+      :class="{ visible: mapStatus === 'ready' }"
+    ></div>
 
-    <div v-if="mapStatus !== 'ready'" class="map-service-state" :class="mapStatus">
+    <div
+      v-if="mapStatus !== 'ready'"
+      class="map-service-state"
+      :class="mapStatus"
+    >
       <template v-if="mapStatus === 'loading'">
         <LoaderCircle class="spin" :size="32" />
         <strong>正在连接高德地图</strong>
         <p>加载真实中国底图与行政区边界</p>
       </template>
       <template v-else-if="mapIssue">
-        <AlertTriangle :size="30" />
-        <strong>{{ mapIssue.message }}</strong>
-        <code>{{ mapIssue.code }}</code>
-        <p>{{ mapIssue.suggestion }}</p>
-        <button type="button" @click="loadMap"><RefreshCw :size="16" />重新加载</button>
+        <span class="offline-atlas-compass"
+          ><Compass :size="58" :stroke-width="1"
+        /></span>
+        <span class="offline-atlas-label">城市索引 · 非导航底图</span>
+        <strong>{{
+          overview.visited_cities.length
+            ? '底图稍后加载，记忆随时可读。'
+            : '下一次抵达，会留在这里。'
+        }}</strong>
+        <p>
+          在线地图暂不可用。已记录的城市仍可从城市档案打开；记录新抵达，也可以手动选城。
+        </p>
+        <details class="atlas-map-diagnostics">
+          <summary>查看地图状态</summary>
+          <p>{{ mapIssue.message }}</p>
+          <code>{{ mapIssue.code }}</code>
+          <p>{{ mapIssue.suggestion }}</p>
+          <button type="button" @click="loadMap">
+            <RefreshCw :size="15" />重新加载底图
+          </button>
+        </details>
       </template>
     </div>
 
-    <div v-if="mapStatus === 'ready' && mapIssue" class="map-warning" role="status">
+    <div
+      v-if="mapStatus === 'ready' && mapIssue"
+      class="map-warning"
+      role="status"
+    >
       <AlertTriangle :size="15" />
       <span>{{ mapIssue.message }}</span>
       <code>{{ mapIssue.code }}</code>
     </div>
 
-    <div class="map-watermark">
-      <span>CHINA · 旅行图鉴</span>
-      <small>AMAP · LOCA 2.0</small>
-    </div>
-
     <div class="map-controls" aria-label="地图控制">
-      <button type="button" title="放大" aria-label="放大" :disabled="!map" @click="zoom(1)"><Plus :size="19" /></button>
-      <button type="button" title="缩小" aria-label="缩小" :disabled="!map" @click="zoom(-1)"><Minus :size="19" /></button>
-      <button type="button" title="定位并点亮城市" aria-label="定位并点亮城市" @click="emit('requestCheckIn')"><LocateFixed :size="19" /></button>
+      <button
+        type="button"
+        title="放大"
+        aria-label="放大"
+        :disabled="!map"
+        @click="zoom(1)"
+      >
+        <Plus :size="19" />
+      </button>
+      <button
+        type="button"
+        title="缩小"
+        aria-label="缩小"
+        :disabled="!map"
+        @click="zoom(-1)"
+      >
+        <Minus :size="19" />
+      </button>
+      <button
+        type="button"
+        title="定位并点亮城市"
+        aria-label="定位并点亮城市"
+        @click="emit('requestCheckIn')"
+      >
+        <LocateFixed :size="19" />
+      </button>
     </div>
   </section>
 </template>

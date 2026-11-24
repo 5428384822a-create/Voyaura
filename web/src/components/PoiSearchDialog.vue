@@ -54,7 +54,7 @@ function formatTime(value: string) {
   <div class="dialog-backdrop poi-search-backdrop" role="presentation" @click.self="emit('close')">
     <section class="poi-search-dialog" role="dialog" aria-modal="true" aria-labelledby="poi-search-title">
       <header>
-        <div><p class="eyebrow">AMAP CITY DISCOVERY</p><h2 id="poi-search-title">搜索城市地点</h2></div>
+        <div><h2 id="poi-search-title">搜索城市地点</h2></div>
         <button type="button" title="关闭地点搜索" aria-label="关闭地点搜索" @click="emit('close')"><X :size="20" /></button>
       </header>
 

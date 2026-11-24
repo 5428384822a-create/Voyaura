@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import require_actor_username
 from app.database import get_db
 from app.errors import AppError
 from app.image_styles import (
@@ -108,6 +109,7 @@ def require_source(
     username: str,
     asset_id: uuid.UUID,
 ) -> tuple[User, City, CityMemory, MediaAsset]:
+    require_actor_username(db, username)
     row = db.execute(
         select(User, City, CityMemory, MediaAsset)
         .join(CityMemory, CityMemory.user_id == User.id)
@@ -224,6 +226,7 @@ def require_job_context(
     username: str,
     job_id: uuid.UUID,
 ) -> tuple[User, City, CityMemory, MediaAsset, ImageGenerationJob]:
+    require_actor_username(db, username)
     row = db.execute(
         select(User, City, CityMemory, MediaAsset, ImageGenerationJob)
         .join(ImageGenerationJob, ImageGenerationJob.user_id == User.id)
@@ -405,6 +408,7 @@ def list_image_jobs(
     favorite_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> ImageJobListOut:
+    require_actor_username(db, username)
     statement = (
         select(ImageGenerationJob, City, CityMemory, MediaAsset)
         .join(User, User.id == ImageGenerationJob.user_id)
@@ -493,6 +497,7 @@ def confirm_image_job_delete(
     db: Annotated[Session, Depends(get_db)],
     storage: Annotated[MediaStorage, Depends(get_media_storage)],
 ) -> ImageJobDeleteConfirmOut:
+    require_actor_username(db, payload.username)
     user = db.scalar(select(User).where(User.username == payload.username))
     if user is None:
         raise AppError("USER_NOT_FOUND", "找不到图片任务所属的用户。", status_code=404)

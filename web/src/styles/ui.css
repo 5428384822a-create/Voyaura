@@ -1,0 +1,42 @@
+body { background: var(--canvas); }
+button, input, textarea, select { font-family: var(--font-family); }
+button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+:where(button, a, input, select, textarea, summary):focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.ui-button, .primary-action, .secondary-action, .journey-primary, .journey-secondary, .journey-text-action, .text-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: var(--font-family);
+  font-size: var(--font-secondary);
+  font-weight: 550;
+  line-height: 1.5;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: none;
+}
+.ui-button--primary, .primary-action, .journey-primary { color: white; border-color: var(--action); background: var(--action); }
+.ui-button--primary:hover:not(:disabled), .primary-action:hover:not(:disabled), .journey-primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+.ui-button--secondary, .secondary-action, .journey-secondary { color: var(--text-body); border-color: var(--border-control); background: var(--surface); }
+.ui-button--secondary:hover:not(:disabled), .secondary-action:hover:not(:disabled), .journey-secondary:hover:not(:disabled) { background: var(--surface-soft); border-color: var(--text-secondary); }
+.ui-button--tertiary, .journey-text-action, .text-button { color: var(--action); background: transparent; padding-inline: 4px; }
+.ui-button--tertiary:hover:not(:disabled), .journey-text-action:hover:not(:disabled), .text-button:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; }
+.ui-button--destructive { color: var(--danger); background: var(--surface); border-color: var(--danger); }
+.ui-button--destructive:hover:not(:disabled) { background: var(--danger-soft); }
+.ui-button:active:not(:disabled) { transform: translateY(1px); }
+.ui-button:disabled { color: var(--text-secondary); border-color: var(--border-subtle); background: var(--surface-soft); cursor: not-allowed; opacity: 1; }
+.ui-button > svg { flex: none; }
+.ui-status { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 8px; border-radius: 4px; color: var(--text-secondary); background: var(--surface-soft); font-size: var(--font-label); line-height: 1.5; }
+.ui-status > svg { flex: none; }
+.ui-status--success { color: var(--success); background: var(--success-soft); }
+.ui-status--warning { color: var(--warning); background: var(--warning-soft); }
+.ui-status--error { color: var(--danger); background: var(--danger-soft); }
+:where(input, textarea, select):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]) { font-size: var(--font-body); }
+:where(input[type=checkbox], input[type=radio], summary) { accent-color: var(--action); }
+.ui-disclosure { margin-block: var(--space-5); border-top: 1px solid var(--border-subtle); padding-top: var(--space-4); }
+.ui-disclosure > summary { display: list-item; padding: 10px 0; min-height: 44px; color: var(--text-body); font-size: var(--font-secondary); cursor: pointer; }
+.ui-disclosure > p { color: var(--text-secondary); font-size: var(--font-secondary); line-height: var(--line-body); }

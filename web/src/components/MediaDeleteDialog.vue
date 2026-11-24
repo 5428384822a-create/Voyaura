@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiButton from './UiButton.vue'
 import { AlertTriangle, Camera, Check, Film, LoaderCircle, Trash2, X } from 'lucide-vue-next'
 import type { AppErrorInfo, MediaDeletePreview, VisitedCity } from '../types'
 
@@ -25,7 +26,7 @@ function formatBytes(bytes: number): string {
     <section class="media-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="media-delete-title">
       <header>
         <div>
-          <p class="eyebrow">PRIVATE MEDIA · {{ city.adcode }}</p>
+
           <h2 id="media-delete-title">删除媒体</h2>
         </div>
         <button type="button" title="关闭删除确认" aria-label="关闭删除确认" @click="emit('cancel')"><X :size="20" /></button>
@@ -45,7 +46,7 @@ function formatBytes(bytes: number): string {
         <p>{{ preview.confirmation_notice }}</p>
         <div class="memory-composer-actions">
           <button type="button" class="secondary" @click="emit('cancel')">保留文件</button>
-          <button type="button" class="danger-primary" @click="emit('confirm')"><Trash2 :size="16" />确认删除</button>
+          <UiButton variant="destructive" type="button" @click="emit('confirm')"><Trash2 :size="16" />确认删除</UiButton>
         </div>
       </div>
 

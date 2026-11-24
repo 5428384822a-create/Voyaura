@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { AlertTriangle, Bell, LoaderCircle, MessageCircle, Send, Sparkles, X } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { viewPaths } from './router'
+import type { DiscoveryIntent } from './content/discovery'
 import {
   ApiClientError,
   confirmCheckIn,
@@ -32,6 +34,11 @@ import {
   uploadMediaFile,
 } from './api'
 import AppNavigation from './components/AppNavigation.vue'
+import ProductHeader from './components/ProductHeader.vue'
+import DiscoverHomeView from './views/DiscoverHomeView.vue'
+import ConnectionPanel from './components/ConnectionPanel.vue'
+import AgentWorkspace from './views/AgentWorkspace.vue'
+import { getAccessToken } from './api/session'
 import CheckInDialog from './components/CheckInDialog.vue'
 import CityMemoryPanel from './components/CityMemoryPanel.vue'
 import MemoryComposerDialog from './components/MemoryComposerDialog.vue'
@@ -78,25 +85,95 @@ import EmptyView from './views/EmptyView.vue'
 import ImageStudioView from './views/ImageStudioView.vue'
 import JourneyPlannerView from './views/JourneyPlannerView.vue'
 import MapHomeView from './views/MapHomeView.vue'
+import MemoryLibraryView from './views/MemoryLibraryView.vue'
+import AccountHomeView from './views/AccountHomeView.vue'
+import UnsavedChangesDialog from './components/UnsavedChangesDialog.vue'
+import type { AgentRun } from './api/agent'
+import { manualCityIndex, matchManualCities } from './content/cityIndex'
 
-const activeView = ref<AppView>('map')
+const route = useRoute()
+const router = useRouter()
+const activeView = computed<AppView>({
+  get: () =>
+    typeof route.name === 'string' && route.name in viewPaths
+      ? (route.name as AppView)
+      : 'discover',
+  set: (view) => {
+    void router.push(viewPaths[view])
+  },
+})
+const previewCover = computed(() =>
+  import.meta.env.DEV && route.query.style === 'immersive'
+    ? 'immersive'
+    : 'city',
+)
 const overview = ref<MapOverview>(emptyOverview)
 const apiConnected = ref(false)
-const xiaoxiOpen = ref(false)
-const composer = ref('')
-const xiaoxiPhase = ref<'idle' | 'loading' | 'error'>('idle')
-const xiaoxiError = ref<AppErrorInfo | null>(null)
-const xiaoxiEntries = ref<Array<{
-  id: string
-  role: 'user' | 'assistant'
-  text: string
-  preview?: XiaoxiPlanningPreview
-}>>([])
-const checkInPhase = ref<'idle' | 'locating' | 'manual' | 'preview' | 'confirming' | 'success' | 'error'>('idle')
+const connectionOpen = ref(false)
+const pendingView = ref<AppView | null>(null)
+const pendingDestination = ref<string | null>(null)
+const hasSession = ref(Boolean(getAccessToken()))
+const overviewBusy = ref(false)
+const agentDirty = ref(false)
+const memoryDirty = ref(false)
+const discardOpen = ref(false)
+let discardDecision: ((allowed: boolean) => void) | null = null
+const hasUnsavedChanges = computed(() => agentDirty.value || memoryDirty.value)
+function confirmDiscard(): Promise<boolean> {
+  if (!hasUnsavedChanges.value) return Promise.resolve(true)
+  if (discardDecision) return Promise.resolve(false)
+  discardOpen.value = true
+  return new Promise((resolve) => {
+    discardDecision = resolve
+  })
+}
+function decideDiscard(allowed: boolean) {
+  const decision = discardDecision
+  discardDecision = null
+  discardOpen.value = false
+  if (allowed) {
+    agentDirty.value = false
+    memoryDirty.value = false
+  }
+  decision?.(allowed)
+}
+const removeNavigationGuard = router.beforeEach((to, from) =>
+  to.fullPath === from.fullPath ? true : confirmDiscard(),
+)
+function protectUnload(event: BeforeUnloadEvent) {
+  if (hasUnsavedChanges.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+const agentIntent = ref<DiscoveryIntent | null>(
+  window.history.state?.discoveryIntent ?? null,
+)
+const agentCity = ref('440100')
+const storyWorkspaceOpen = computed(
+  () => activeView.value === 'memories' && route.query.compose === 'story',
+)
+const storyCity = computed(() =>
+  typeof route.query.city === 'string' && /^\d{6}$/.test(route.query.city)
+    ? route.query.city
+    : agentCity.value,
+)
+const routeToolsOpen = ref(false)
+const checkInPhase = ref<
+  | 'idle'
+  | 'locating'
+  | 'manual'
+  | 'preview'
+  | 'confirming'
+  | 'success'
+  | 'error'
+>('idle')
 const checkInPayload = ref<CheckInCoordinates | ManualCityCheckIn | null>(null)
 const checkInPreview = ref<CheckInPreview | null>(null)
 const checkInError = ref<AppErrorInfo | null>(null)
-const locationMode = ref<'device-high' | 'device-fallback' | 'ip'>('device-high')
+const locationMode = ref<'device-high' | 'device-fallback' | 'ip'>(
+  'device-high',
+)
 const manualResults = ref<CityCandidate[]>([])
 const manualBusy = ref(false)
 const manualError = ref<AppErrorInfo | null>(null)
@@ -111,25 +188,37 @@ const mediaTaskError = ref<AppErrorInfo | null>(null)
 const memoryComposerCity = ref<VisitedCity | null>(null)
 const memoryComposerMode = ref<'create' | 'edit'>('create')
 const memoryTarget = ref<CityMemoryItem | null>(null)
-const memoryComposerPhase = ref<'editing' | 'preview' | 'saving' | 'success' | 'error'>('editing')
+const memoryComposerPhase = ref<
+  'editing' | 'preview' | 'saving' | 'success' | 'error'
+>('editing')
 const memoryDraft = ref<CityMemoryDraft | null>(null)
-const memoryPreview = ref<CityMemoryPreview | CityMemoryUpdatePreview | null>(null)
+const memoryPreview = ref<CityMemoryPreview | CityMemoryUpdatePreview | null>(
+  null,
+)
 const memoryError = ref<AppErrorInfo | null>(null)
 const memoryDeleteCity = ref<VisitedCity | null>(null)
 const memoryDeleteTarget = ref<CityMemoryItem | null>(null)
-const memoryDeletePhase = ref<'loading' | 'preview' | 'deleting' | 'success' | 'error'>('loading')
+const memoryDeletePhase = ref<
+  'loading' | 'preview' | 'deleting' | 'success' | 'error'
+>('loading')
 const memoryDeleteDraft = ref<CityMemoryDeleteDraft | null>(null)
 const memoryDeletePreview = ref<CityMemoryDeletePreview | null>(null)
 const memoryDeleteError = ref<AppErrorInfo | null>(null)
 const mediaDeleteCity = ref<VisitedCity | null>(null)
-const mediaDeleteTarget = ref<{ memoryId: string, assetId: string } | null>(null)
-const mediaDeletePhase = ref<'loading' | 'preview' | 'deleting' | 'success' | 'error'>('loading')
+const mediaDeleteTarget = ref<{ memoryId: string; assetId: string } | null>(
+  null,
+)
+const mediaDeletePhase = ref<
+  'loading' | 'preview' | 'deleting' | 'success' | 'error'
+>('loading')
 const mediaDeleteDraft = ref<MediaDeleteDraft | null>(null)
 const mediaDeletePreview = ref<MediaDeletePreview | null>(null)
 const mediaDeleteError = ref<AppErrorInfo | null>(null)
 const mediaUploadCity = ref<VisitedCity | null>(null)
 const mediaUploadMemory = ref<CityMemoryItem | null>(null)
-const mediaUploadPhase = ref<'selecting' | 'preview' | 'uploading' | 'processing' | 'success' | 'error'>('selecting')
+const mediaUploadPhase = ref<
+  'selecting' | 'preview' | 'uploading' | 'processing' | 'success' | 'error'
+>('selecting')
 const mediaUploadFile = ref<File | null>(null)
 const mediaUploadDraft = ref<MediaUploadDraft | null>(null)
 const mediaUploadPreview = ref<MediaUploadPreview | null>(null)
@@ -137,35 +226,173 @@ const mediaUploadIntent = ref<MediaUploadIntent | null>(null)
 const mediaUploadTransferred = ref(false)
 const mediaUploadCompleted = ref(false)
 const mediaUploadError = ref<AppErrorInfo | null>(null)
-const mediaUploadProgress = ref<MediaUploadProgress>({ loaded: 0, total: 0, percent: 0 })
+const mediaUploadProgress = ref<MediaUploadProgress>({
+  loaded: 0,
+  total: 0,
+  percent: 0,
+})
 const imageStyleCity = ref<VisitedCity | null>(null)
 const imageStyleMemory = ref<CityMemoryItem | null>(null)
 const imageStyleAsset = ref<MemoryMediaAsset | null>(null)
 const imageStyleCatalog = ref<ImageStyleCatalog | null>(null)
-const imageStylePhase = ref<'loading' | 'editing' | 'preview' | 'creating' | 'processing' | 'success' | 'error'>('loading')
+const imageStylePhase = ref<
+  | 'loading'
+  | 'editing'
+  | 'preview'
+  | 'creating'
+  | 'processing'
+  | 'success'
+  | 'error'
+>('loading')
 const imageStyleDraft = ref<ImageJobCreateDraft | null>(null)
 const imageStylePreview = ref<ImageJobPreview | null>(null)
 const imageStyleJob = ref<ImageJob | null>(null)
 const imageStyleError = ref<AppErrorInfo | null>(null)
 const poiSearchOpen = ref(false)
-const poiSearchPhase = ref<'editing' | 'loading' | 'results' | 'error'>('editing')
+const poiSearchPhase = ref<'editing' | 'loading' | 'results' | 'error'>(
+  'editing',
+)
 const poiSearchResult = ref<PoiSearchResult | null>(null)
 const poiSearchError = ref<AppErrorInfo | null>(null)
 let mediaUploadAbortController: AbortController | null = null
 let mediaUploadPollVersion = 0
 let imageStylePollVersion = 0
-const checkInBusy = computed(() => checkInPhase.value === 'locating' || checkInPhase.value === 'confirming')
+const checkInBusy = computed(
+  () =>
+    checkInPhase.value === 'locating' || checkInPhase.value === 'confirming',
+)
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', protectUnload)
+  if (!getAccessToken()) {
+    if (!['discover', 'profile'].includes(activeView.value)) {
+      pendingView.value = activeView.value
+      pendingDestination.value = route.fullPath
+      await router.replace(viewPaths.discover)
+      connectionOpen.value = true
+    }
+    return
+  }
+  await loadOverview()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', protectUnload)
+  removeNavigationGuard()
+  discardDecision?.(false)
+  discardDecision = null
+})
+async function loadOverview() {
+  overviewBusy.value = true
   try {
     overview.value = await getMapOverview()
     apiConnected.value = true
   } catch {
     apiConnected.value = false
+  } finally {
+    overviewBusy.value = false
   }
-})
+}
+watch(
+  () => route.fullPath,
+  () => {
+    routeToolsOpen.value = false
+    closeCityMemory()
+    memoryComposerCity.value = null
+    memoryDirty.value = false
+  },
+)
 
-function localError(code: string, message: string, retryable = true): AppErrorInfo {
+function selectView(view: AppView) {
+  if (!['discover', 'profile'].includes(view) && !getAccessToken()) {
+    pendingView.value = view
+    pendingDestination.value = viewPaths[view]
+    connectionOpen.value = true
+    return
+  }
+  activeView.value = view
+}
+
+function startDiscoveryPlan(intent: DiscoveryIntent) {
+  agentIntent.value = intent
+  agentCity.value = intent.cityAdcode ?? '440100'
+  routeToolsOpen.value = false
+  selectedCity.value = null
+  if (!getAccessToken()) {
+    pendingView.value = 'journeys'
+    pendingDestination.value = null
+    connectionOpen.value = true
+    return
+  }
+  void router.push({
+    path: viewPaths.journeys,
+    state: { discoveryIntent: JSON.parse(JSON.stringify(intent)) },
+  })
+}
+
+function closeConnection() {
+  connectionOpen.value = false
+  pendingView.value = null
+  pendingDestination.value = null
+}
+
+async function onConnected() {
+  connectionOpen.value = false
+  hasSession.value = true
+  await loadOverview()
+  const next = pendingView.value
+  const destination = pendingDestination.value
+  pendingView.value = null
+  pendingDestination.value = null
+  if (destination) {
+    await router.push(destination)
+    return
+  }
+  if (next === 'journeys' && agentIntent.value) {
+    await router.push({
+      path: viewPaths.journeys,
+      state: { discoveryIntent: JSON.parse(JSON.stringify(agentIntent.value)) },
+    })
+  } else if (next) activeView.value = next
+}
+function openAccount() {
+  if (hasSession.value) selectView('profile')
+  else connectionOpen.value = true
+}
+function openRecentRun(run: AgentRun) {
+  const city =
+    typeof run.request.city_adcode === 'string'
+      ? run.request.city_adcode
+      : '440100'
+  void router.push({
+    path: run.kind === 'plan' ? viewPaths.journeys : viewPaths.memories,
+    query: {
+      run: run.id,
+      ...(run.kind === 'story' ? { compose: 'story', city } : {}),
+    },
+  })
+}
+function navigateWorkspaceKind(kind: 'plan' | 'story', cityAdcode: string) {
+  void router.push({
+    path: kind === 'plan' ? viewPaths.journeys : viewPaths.memories,
+    query: {
+      city: cityAdcode,
+      ...(kind === 'story' ? { compose: 'story' } : {}),
+    },
+  })
+}
+async function openRouteTools() {
+  if (await confirmDiscard()) routeToolsOpen.value = true
+}
+
+function reloadDisconnected() {
+  window.location.reload()
+}
+
+function localError(
+  code: string,
+  message: string,
+  retryable = true,
+): AppErrorInfo {
   return { code, message, details: {}, retryable }
 }
 
@@ -201,21 +428,31 @@ async function searchCityPois(draft: PoiSearchDraft) {
 
 function geolocationError(error: GeolocationPositionError): AppErrorInfo {
   const errors: Record<number, AppErrorInfo> = {
-    1: localError('LOCATION_PERMISSION_DENIED', '浏览器没有获得位置权限。', false),
+    1: localError(
+      'LOCATION_PERMISSION_DENIED',
+      '浏览器没有获得位置权限。',
+      false,
+    ),
     2: localError('LOCATION_UNAVAILABLE', '设备暂时无法取得当前位置。'),
     3: localError('LOCATION_TIMEOUT', '获取位置超时。'),
   }
-  return errors[error.code] ?? localError('LOCATION_UNKNOWN_ERROR', error.message)
+  return (
+    errors[error.code] ?? localError('LOCATION_UNKNOWN_ERROR', error.message)
+  )
 }
 
 function isGeolocationError(error: unknown): error is GeolocationPositionError {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && typeof error.code === 'number'
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'number'
+  )
 }
 
-function getBrowserPosition(options: PositionOptions): Promise<GeolocationPosition> {
+function getBrowserPosition(
+  options: PositionOptions,
+): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, options)
   })
@@ -242,7 +479,11 @@ async function startCheckIn() {
   checkInPayload.value = null
   manualError.value = null
   if (!navigator.geolocation) {
-    checkInError.value = localError('LOCATION_NOT_SUPPORTED', '当前浏览器不支持位置服务。', false)
+    checkInError.value = localError(
+      'LOCATION_NOT_SUPPORTED',
+      '当前浏览器不支持位置服务。',
+      false,
+    )
     checkInPhase.value = 'error'
     return
   }
@@ -314,7 +555,7 @@ async function useIpCity() {
 }
 
 function openManualCitySearch() {
-  manualResults.value = []
+  manualResults.value = [...manualCityIndex]
   manualError.value = null
   checkInPhase.value = 'manual'
 }
@@ -323,15 +564,25 @@ async function searchManualCity(query: string) {
   manualBusy.value = true
   manualError.value = null
   try {
+    const local = matchManualCities(query)
+    if (local.length) {
+      manualResults.value = local
+      return
+    }
     manualResults.value = await searchCities(query)
     if (!manualResults.value.length) {
-      manualError.value = localError('CITY_SEARCH_EMPTY', '没有找到对应城市，请输入完整城市名。', false)
+      manualError.value = localError(
+        'CITY_SEARCH_EMPTY',
+        '没有找到对应城市，请输入完整城市名。',
+        false,
+      )
     }
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'AMAP_CITY_SEARCH_FAILED'
+    const code =
+      error instanceof Error ? error.message : 'AMAP_CITY_SEARCH_FAILED'
     manualError.value = localError(
       code.startsWith('AMAP_') ? code : 'AMAP_CITY_SEARCH_FAILED',
-      '城市搜索暂时不可用，请检查高德 JS API 配置。',
+      '本地六城索引没有匹配，在线城市搜索暂不可用。可以先选择列表中的城市。',
     )
   } finally {
     manualBusy.value = false
@@ -352,16 +603,20 @@ async function selectManualCity(candidate: CityCandidate) {
 
 async function confirmCurrentCity() {
   if (!checkInPayload.value) {
-    checkInError.value = localError('LOCATION_CONTEXT_LOST', '定位上下文已失效，请重新定位。')
+    checkInError.value = localError(
+      'LOCATION_CONTEXT_LOST',
+      '定位上下文已失效，请重新定位。',
+    )
     checkInPhase.value = 'error'
     return
   }
 
   checkInPhase.value = 'confirming'
   try {
-    const result = 'coordinate_system' in checkInPayload.value
-      ? await confirmCheckIn(checkInPayload.value)
-      : await confirmManualCheckIn(checkInPayload.value)
+    const result =
+      'coordinate_system' in checkInPayload.value
+        ? await confirmCheckIn(checkInPayload.value)
+        : await confirmManualCheckIn(checkInPayload.value)
     overview.value = await getMapOverview()
     focusPoint.value = [result.city.longitude, result.city.latitude]
     checkInPhase.value = 'success'
@@ -377,6 +632,14 @@ function closeCheckIn() {
   manualError.value = null
 }
 
+function openCheckedInArchive() {
+  const city = overview.value.visited_cities.find(
+    (item) => item.adcode === checkInPreview.value?.adcode,
+  )
+  closeCheckIn()
+  if (city) void selectCity(city)
+}
+
 async function selectCity(city: VisitedCity) {
   focusPoint.value = [city.longitude, city.latitude]
   selectedCity.value = city
@@ -385,7 +648,6 @@ async function selectCity(city: VisitedCity) {
   cityMediaTasks.value = []
   mediaTaskError.value = null
   cityMemoryPhase.value = 'loading'
-  xiaoxiOpen.value = false
   const [detailResult, tasksResult] = await Promise.allSettled([
     getCityMemories(city.adcode),
     getCityMediaTasks(city.adcode),
@@ -415,7 +677,7 @@ function closeCityMemory() {
 
 function openXiaoxi() {
   selectedCity.value = null
-  xiaoxiOpen.value = true
+  selectView('journeys')
 }
 
 function selectAppView(view: AppView) {
@@ -425,9 +687,24 @@ function selectAppView(view: AppView) {
 }
 
 function askXiaoxiAboutCity(city: VisitedCity) {
+  const latestDate = cityMemoryDetail.value?.memories[0]?.occurred_at.slice(
+    0,
+    10,
+  )
+  agentCity.value = city.adcode
+  openStoryWorkspace(city.adcode, latestDate)
+}
+
+function openStoryWorkspace(cityAdcode = agentCity.value, startDate?: string) {
   closeCityMemory()
-  xiaoxiOpen.value = true
-  composer.value = `小曦，带我回顾在${city.name_zh}的旅行记忆。`
+  void router.push({
+    path: viewPaths.memories,
+    query: {
+      compose: 'story',
+      city: cityAdcode,
+      ...(startDate ? { date: startDate } : {}),
+    },
+  })
 }
 
 async function submitXiaoxiMessage() {
@@ -482,7 +759,9 @@ function openMemoryEditor(memory: CityMemoryItem) {
   memoryError.value = null
 }
 
-function closeMemoryComposer() {
+async function closeMemoryComposer() {
+  if (memoryDirty.value && !(await confirmDiscard())) return
+  memoryDirty.value = false
   memoryComposerCity.value = null
   memoryTarget.value = null
   memoryDraft.value = null
@@ -501,7 +780,11 @@ async function previewMemory(input: NewMemoryInput) {
   try {
     if (memoryComposerMode.value === 'edit') {
       if (!memoryTarget.value) {
-        memoryError.value = localError('MEMORY_CONTEXT_LOST', '找不到要修改的记忆。', false)
+        memoryError.value = localError(
+          'MEMORY_CONTEXT_LOST',
+          '找不到要修改的记忆。',
+          false,
+        )
         memoryComposerPhase.value = 'error'
         return
       }
@@ -539,7 +822,11 @@ async function refreshMemoryViews(adcode: string) {
 
 async function confirmMemory() {
   if (!memoryComposerCity.value || !memoryDraft.value) {
-    memoryError.value = localError('MEMORY_CONTEXT_LOST', '记忆编辑上下文已失效，请重新填写。', false)
+    memoryError.value = localError(
+      'MEMORY_CONTEXT_LOST',
+      '记忆编辑上下文已失效，请重新填写。',
+      false,
+    )
     memoryComposerPhase.value = 'error'
     return
   }
@@ -548,7 +835,11 @@ async function confirmMemory() {
   try {
     if (memoryComposerMode.value === 'edit') {
       if (!memoryTarget.value) {
-        memoryError.value = localError('MEMORY_CONTEXT_LOST', '找不到要修改的记忆。', false)
+        memoryError.value = localError(
+          'MEMORY_CONTEXT_LOST',
+          '找不到要修改的记忆。',
+          false,
+        )
         memoryComposerPhase.value = 'error'
         return
       }
@@ -558,7 +849,10 @@ async function confirmMemory() {
         memoryDraft.value,
       )
     } else {
-      await confirmCityMemory(memoryComposerCity.value.adcode, memoryDraft.value)
+      await confirmCityMemory(
+        memoryComposerCity.value.adcode,
+        memoryDraft.value,
+      )
     }
     await refreshMemoryViews(memoryComposerCity.value.adcode)
     memoryComposerPhase.value = 'success'
@@ -606,7 +900,11 @@ function closeMemoryDelete() {
 }
 
 async function confirmMemoryDelete() {
-  if (!memoryDeleteCity.value || !memoryDeleteTarget.value || !memoryDeleteDraft.value) {
+  if (
+    !memoryDeleteCity.value ||
+    !memoryDeleteTarget.value ||
+    !memoryDeleteDraft.value
+  ) {
     memoryDeleteError.value = localError(
       'MEMORY_CONTEXT_LOST',
       '删除确认上下文已失效，请重新选择记忆。',
@@ -668,7 +966,11 @@ function closeMediaDelete() {
 }
 
 async function confirmSelectedMediaDelete() {
-  if (!mediaDeleteCity.value || !mediaDeleteTarget.value || !mediaDeleteDraft.value) {
+  if (
+    !mediaDeleteCity.value ||
+    !mediaDeleteTarget.value ||
+    !mediaDeleteDraft.value
+  ) {
     mediaDeleteError.value = localError(
       'MEDIA_DELETE_CONTEXT_LOST',
       '媒体删除上下文已失效，请重新选择文件。',
@@ -717,7 +1019,10 @@ async function retryMediaTask(task: MediaTaskItem) {
         throw new ApiClientError({
           code: status.failure_code ?? 'MEDIA_PROCESSING_ERROR',
           message: status.failure_message ?? '媒体重新处理失败。',
-          details: { asset_id: status.asset_id, scan_status: status.scan_status },
+          details: {
+            asset_id: status.asset_id,
+            scan_status: status.scan_status,
+          },
           retryable: status.retryable,
         })
       }
@@ -971,7 +1276,9 @@ async function waitForMediaReady(
     if (status.status === 'failed') {
       throw new ApiClientError({
         code: status.failure_code ?? 'MEDIA_PROCESSING_ERROR',
-        message: status.failure_message ?? '媒体安全处理失败，请重新选择文件或稍后重试。',
+        message:
+          status.failure_message ??
+          '媒体安全处理失败，请重新选择文件或稍后重试。',
         details: { asset_id: status.asset_id, scan_status: status.scan_status },
         retryable: status.retryable,
       })
@@ -987,10 +1294,10 @@ async function waitForMediaReady(
 
 async function confirmMediaUpload() {
   if (
-    !mediaUploadCity.value
-    || !mediaUploadMemory.value
-    || !mediaUploadFile.value
-    || !mediaUploadDraft.value
+    !mediaUploadCity.value ||
+    !mediaUploadMemory.value ||
+    !mediaUploadFile.value ||
+    !mediaUploadDraft.value
   ) {
     mediaUploadError.value = localError(
       'MEDIA_UPLOAD_CONTEXT_LOST',
@@ -1003,7 +1310,11 @@ async function confirmMediaUpload() {
   mediaUploadPhase.value = 'uploading'
   mediaUploadError.value = null
   mediaUploadProgress.value = mediaUploadTransferred.value
-    ? { loaded: mediaUploadFile.value.size, total: mediaUploadFile.value.size, percent: 100 }
+    ? {
+        loaded: mediaUploadFile.value.size,
+        total: mediaUploadFile.value.size,
+        percent: 100,
+      }
     : { loaded: 0, total: mediaUploadFile.value.size, percent: 0 }
   const pollVersion = ++mediaUploadPollVersion
   try {
@@ -1020,12 +1331,17 @@ async function confirmMediaUpload() {
         const uploadController = new AbortController()
         mediaUploadAbortController = uploadController
         try {
-          await uploadMediaFile(mediaUploadIntent.value, mediaUploadFile.value, {
-            signal: uploadController.signal,
-            onProgress: (progress) => {
-              if (pollVersion === mediaUploadPollVersion) mediaUploadProgress.value = progress
+          await uploadMediaFile(
+            mediaUploadIntent.value,
+            mediaUploadFile.value,
+            {
+              signal: uploadController.signal,
+              onProgress: (progress) => {
+                if (pollVersion === mediaUploadPollVersion)
+                  mediaUploadProgress.value = progress
+              },
             },
-          })
+          )
         } finally {
           if (mediaUploadAbortController === uploadController) {
             mediaUploadAbortController = null
@@ -1072,33 +1388,102 @@ async function confirmMediaUpload() {
 
 <template>
   <div class="app-shell">
-    <aside class="brand-rail">
-      <button class="brand-mark" type="button" title="Voyaura 地图" aria-label="Voyaura 地图" @click="selectAppView('map')">V</button>
-      <AppNavigation :active-view="activeView" @select="selectAppView" />
-      <button class="notification-button" type="button" title="通知" aria-label="通知"><Bell :size="20" /></button>
-      <span class="avatar" title="AuroraRovella">AR</span>
-    </aside>
+    <ProductHeader
+      :active-view="activeView"
+      :connected="apiConnected"
+      @select="selectView"
+      @connect="openAccount"
+      @xiaoxi="openXiaoxi"
+    />
+    <DiscoverHomeView
+      v-if="
+        activeView === 'discover' || (!hasSession && activeView !== 'profile')
+      "
+      :connected="apiConnected"
+      :cover="previewCover"
+      :stats="overview.stats"
+      @plan="startDiscoveryPlan"
+      @map="selectView('map')"
+      @stories="selectView('memories')"
+      @connect="connectionOpen = true"
+    />
 
     <MapHomeView
-      v-if="activeView === 'map'"
+      v-else-if="activeView === 'map'"
       :overview="overview"
       :api-connected="apiConnected"
       :focus-point="focusPoint"
       :check-in-busy="checkInBusy"
       @open-xiaoxi="openXiaoxi"
+      @open-stories="selectView('memories')"
       @request-check-in="startCheckIn"
+      @manual-check-in="openManualCitySearch"
       @search-poi="openPoiSearch"
       @select-city="selectCity"
     />
     <JourneyPlannerView
-      v-else-if="activeView === 'journeys'"
+      v-else-if="activeView === 'journeys' && routeToolsOpen"
       :overview="overview"
-      @back="selectAppView('map')"
+      @back="routeToolsOpen = false"
     />
-    <ImageStudioView v-else-if="activeView === 'studio'" @back="selectAppView('map')" />
-    <EmptyView v-else :view="activeView" @back="selectAppView('map')" />
+    <MemoryLibraryView
+      v-else-if="activeView === 'memories' && !storyWorkspaceOpen"
+      :overview="overview"
+      @map="selectView('map')"
+      @compose="openStoryWorkspace()"
+      @select-city="selectCity"
+      @manual-check-in="openManualCitySearch"
+      @studio="selectView('studio')"
+    />
+    <AgentWorkspace
+      v-else-if="activeView === 'journeys' || storyWorkspaceOpen"
+      :key="`${activeView}-${typeof route.query.run === 'string' ? route.query.run : storyCity}`"
+      :inert="discardOpen || undefined"
+      :initial-run-id="
+        typeof route.query.run === 'string' ? route.query.run : undefined
+      "
+      :confirm-leave="confirmDiscard"
+      :navigate-kind="navigateWorkspaceKind"
+      @dirty-change="agentDirty = $event"
+      :initial-kind="activeView === 'memories' ? 'story' : 'plan'"
+      :initial-city="storyCity"
+      :archive-cities="overview.visited_cities"
+      :initial-date="
+        typeof route.query.date === 'string' ? route.query.date : undefined
+      "
+      :initial-intent="
+        activeView === 'journeys' && !route.query.run && !route.query.city
+          ? agentIntent
+          : null
+      "
+      @back="selectView(activeView === 'memories' ? 'memories' : 'discover')"
+      @memories="selectView('memories')"
+      @connect="connectionOpen = true"
+      @route-tools="openRouteTools"
+    />
+    <ImageStudioView
+      v-else-if="activeView === 'studio'"
+      @back="selectView('map')"
+      @memories="selectView('memories')"
+    />
+    <AccountHomeView
+      v-else-if="activeView === 'profile'"
+      :overview="overview"
+      :connected="apiConnected"
+      :has-session="hasSession"
+      :refreshing="overviewBusy"
+      @connect="connectionOpen = true"
+      @refresh="loadOverview"
+      @select="selectView"
+      @open-run="openRecentRun"
+    />
+    <EmptyView v-else :view="activeView" @back="activeView = 'map'" />
 
-    <AppNavigation class="mobile-nav" :active-view="activeView" @select="selectAppView" />
+    <AppNavigation
+      mode="mobile"
+      :active-view="activeView"
+      @select="selectView"
+    />
 
     <Transition name="dialog">
       <CheckInDialog
@@ -1117,6 +1502,7 @@ async function confirmMediaUpload() {
         @open-manual="openManualCitySearch"
         @search-manual="searchManualCity"
         @select-manual="selectManualCity"
+        @open-archive="openCheckedInArchive"
       />
     </Transition>
 
@@ -1133,27 +1519,58 @@ async function confirmMediaUpload() {
     </Transition>
 
     <Transition name="panel">
-      <CityMemoryPanel
+      <div
         v-if="selectedCity"
-        :city="selectedCity"
-        :phase="cityMemoryPhase"
-        :detail="cityMemoryDetail"
-        :error="cityMemoryError"
-        :media-tasks="cityMediaTasks"
-        :media-task-busy-id="mediaTaskBusyId"
-        :media-task-error="mediaTaskError"
-        @close="closeCityMemory"
-        @retry="selectCity(selectedCity)"
-        @ask-xiaoxi="askXiaoxiAboutCity"
-        @create-memory="openMemoryComposer"
-        @edit-memory="openMemoryEditor"
-        @delete-memory="openMemoryDelete"
-        @upload-media="openMediaUpload"
-        @retry-media="retryMediaTask"
-        @delete-media="openMediaDelete"
-        @style-photo="openImageStyle"
-      />
+        class="city-archive-layer"
+        @click.self="closeCityMemory"
+      >
+        <CityMemoryPanel
+          :city="selectedCity"
+          :suspended="
+            !!memoryComposerCity ||
+            !!memoryDeleteCity ||
+            !!mediaDeleteCity ||
+            !!mediaUploadCity ||
+            !!imageStyleCity ||
+            discardOpen
+          "
+          :phase="cityMemoryPhase"
+          :detail="cityMemoryDetail"
+          :error="cityMemoryError"
+          :media-tasks="cityMediaTasks"
+          :media-task-busy-id="mediaTaskBusyId"
+          :media-task-error="mediaTaskError"
+          @close="closeCityMemory"
+          @retry="selectCity(selectedCity)"
+          @ask-xiaoxi="askXiaoxiAboutCity"
+          @create-memory="openMemoryComposer"
+          @edit-memory="openMemoryEditor"
+          @delete-memory="openMemoryDelete"
+          @upload-media="openMediaUpload"
+          @retry-media="retryMediaTask"
+          @delete-media="openMediaDelete"
+          @style-photo="openImageStyle"
+        />
+      </div>
     </Transition>
+    <ConnectionPanel
+      v-if="connectionOpen"
+      :return-label="
+        pendingView
+          ? {
+              journeys: '行程规划',
+              memories: '旅行记忆与故事',
+              map: '旅行足迹',
+              studio: '影像创作',
+              discover: '旅行发现',
+              profile: '我的档案',
+            }[pendingView]
+          : undefined
+      "
+      @close="closeConnection"
+      @connected="onConnected"
+      @disconnected="reloadDisconnected"
+    />
 
     <Transition name="dialog">
       <MediaUploadDialog
@@ -1211,6 +1628,8 @@ async function confirmMediaUpload() {
         :city="memoryComposerCity"
         :mode="memoryComposerMode"
         :initial-memory="memoryTarget"
+        :inert="discardOpen || undefined"
+        @dirty-change="memoryDirty = $event"
         :phase="memoryComposerPhase"
         :preview="memoryPreview"
         :error="memoryError"
@@ -1232,67 +1651,10 @@ async function confirmMediaUpload() {
         @confirm="confirmMemoryDelete"
       />
     </Transition>
-
-    <Transition name="panel">
-      <aside v-if="xiaoxiOpen" class="xiaoxi-panel" aria-label="小曦旅行助手">
-        <header>
-          <span class="xiaoxi-sun"><Sparkles :size="20" /></span>
-          <div><small>VOYAURA COMPANION</small><strong>小曦</strong></div>
-          <button type="button" title="关闭" aria-label="关闭" @click="xiaoxiOpen = false"><X :size="20" /></button>
-        </header>
-        <div class="chat-body">
-          <p class="date-stamp">TRAVEL PLANNING PREVIEW</p>
-          <div class="xiaoxi-message">
-            <span>曦</span>
-            <p>告诉我目的城市、天数和旅行偏好。我会先整理候选，再交给高德核验位置与路线。</p>
-          </div>
-          <div class="chat-suggestions">
-            <button type="button" @click="composer = '帮我规划杭州三天的独自摄影旅行，节奏轻松，公共交通为主'">杭州摄影三日</button>
-            <button type="button" @click="composer = '帮我规划广州两天的美食与历史街区旅行'">广州美食两日</button>
-            <button type="button" @click="composer = '我想带父母旅行，但还没决定城市'">长辈同行</button>
-          </div>
-          <template v-for="entry in xiaoxiEntries" :key="entry.id">
-            <div v-if="entry.role === 'user'" class="chat-user-message"><p>{{ entry.text }}</p></div>
-            <div v-else class="xiaoxi-message chat-result">
-              <span>曦</span>
-              <div class="xiaoxi-result-body">
-                <p>{{ entry.text }}</p>
-                <template v-if="entry.preview">
-                  <div v-if="entry.preview.status === 'ready_for_poi_search'" class="planning-preview-summary">
-                    <strong>{{ entry.preview.requirements.city_name }} · {{ entry.preview.requirements.day_count }} 天</strong>
-                    <small>候选池 {{ entry.preview.candidate_target_count }} 个 · 每日建议 {{ entry.preview.recommended_daily_attractions.min }}–{{ entry.preview.recommended_daily_attractions.max }} 个景点</small>
-                  </div>
-                  <ul v-if="entry.preview.attraction_hypotheses.length" class="planning-hypotheses">
-                    <li v-for="item in entry.preview.attraction_hypotheses.slice(0, 6)" :key="item.name">
-                      <strong>{{ item.name }}</strong><small>{{ item.reason }}</small>
-                    </li>
-                  </ul>
-                  <div v-if="entry.preview.search_themes.length" class="planning-search-themes">
-                    <span v-for="theme in entry.preview.search_themes" :key="theme.keyword">{{ theme.keyword }}</span>
-                  </div>
-                  <div v-if="entry.preview.clarification_questions.length" class="planning-questions">
-                    <strong>还需要确认</strong>
-                    <p v-for="question in entry.preview.clarification_questions" :key="question">{{ question }}</p>
-                  </div>
-                  <p class="planning-warning"><AlertTriangle :size="13" />{{ entry.preview.warnings[0] }}</p>
-                </template>
-              </div>
-            </div>
-          </template>
-          <div v-if="xiaoxiPhase === 'loading'" class="xiaoxi-loading" aria-live="polite">
-            <LoaderCircle class="spin" :size="18" />小曦正在整理结构化需求
-          </div>
-          <div v-if="xiaoxiError" class="xiaoxi-chat-error" role="alert">
-            <AlertTriangle :size="17" />
-            <div><strong>{{ xiaoxiError.message }}</strong><code>{{ xiaoxiError.code }}</code><small v-if="xiaoxiError.code === 'DEEPSEEK_KEY_MISSING'">请在 api/.env 配置 VOYAURA_DEEPSEEK_API_KEY 后重启 API。</small></div>
-          </div>
-        </div>
-        <form class="chat-composer" @submit.prevent="submitXiaoxiMessage">
-          <MessageCircle :size="18" />
-          <input v-model="composer" aria-label="给小曦发消息" placeholder="例如：杭州三天，独自摄影..." :disabled="xiaoxiPhase === 'loading'" />
-          <button type="submit" title="发送" aria-label="发送" :disabled="!composer.trim() || xiaoxiPhase === 'loading'"><Send :size="18" /></button>
-        </form>
-      </aside>
-    </Transition>
+    <UnsavedChangesDialog
+      v-if="discardOpen"
+      @stay="decideDiscard(false)"
+      @discard="decideDiscard(true)"
+    />
   </div>
 </template>

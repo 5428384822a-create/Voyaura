@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import require_actor_username
 from app.database import get_db
 from app.models import User
 from app.schemas import UserOut
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("/{username}", response_model=UserOut)
 def get_user(username: str, db: Annotated[Session, Depends(get_db)]) -> User:
+    require_actor_username(db, username)
     user = db.scalar(select(User).where(User.username == username))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")

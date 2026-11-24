@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column(
             "recipe_snapshot",
             sa.JSON(),
-            server_default=sa.text("'{}'::json"),
+            server_default=sa.text("'{}'"),
             nullable=False,
         ),
     )

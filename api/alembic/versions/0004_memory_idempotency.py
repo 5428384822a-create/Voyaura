@@ -18,14 +18,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("city_memories", sa.Column("client_request_id", sa.Uuid(), nullable=True))
-    op.create_unique_constraint(
-        "uq_city_memory_user_request",
-        "city_memories",
-        ["user_id", "client_request_id"],
-    )
+    with op.batch_alter_table("city_memories") as batch_op:
+        batch_op.add_column(sa.Column("client_request_id", sa.Uuid(), nullable=True))
+        batch_op.create_unique_constraint(
+            "uq_city_memory_user_request", ["user_id", "client_request_id"]
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_city_memory_user_request", "city_memories", type_="unique")
-    op.drop_column("city_memories", "client_request_id")
+    with op.batch_alter_table("city_memories") as batch_op:
+        batch_op.drop_constraint("uq_city_memory_user_request", type_="unique")
+        batch_op.drop_column("client_request_id")

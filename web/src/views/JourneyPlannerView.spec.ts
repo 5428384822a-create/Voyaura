@@ -145,6 +145,11 @@ describe('JourneyPlannerView', () => {
     await wrapper.get('.route-query-form').trigger('submit')
     await flushPromises()
 
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/tools/routes/plan',
+      expect.objectContaining({ method: 'POST' }),
+    )
     expect(wrapper.text()).toContain('20 小时')
     expect(wrapper.text()).toContain('1600.0 公里')
     expect(wrapper.text()).toContain('¥620')

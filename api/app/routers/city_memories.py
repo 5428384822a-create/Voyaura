@@ -1,13 +1,14 @@
 import hashlib
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth import require_actor_username
 from app.database import get_db
 from app.errors import AppError
 from app.integrations.media_storage import MediaStorage, get_media_storage
@@ -37,6 +38,7 @@ def require_visited_city(
     username: str,
     adcode: str,
 ) -> tuple[User, City, CityVisit]:
+    require_actor_username(db, username)
     user = db.scalar(select(User).where(User.username == username))
     if user is None:
         raise AppError("USER_NOT_FOUND", "找不到城市记忆所属的用户。", status_code=404)
@@ -68,7 +70,7 @@ def memory_out(memory: CityMemory, storage: MediaStorage | None = None) -> CityM
         id=memory.id,
         title=memory.title,
         body=memory.body,
-        occurred_at=memory.occurred_at,
+        occurred_at=utc_timestamp(memory.occurred_at),
         visibility=memory.visibility,
         media=[
             MediaAssetOut(
@@ -104,6 +106,12 @@ def memory_out(memory: CityMemory, storage: MediaStorage | None = None) -> CityM
             if asset.upload_status == "ready"
         ],
     )
+
+
+def utc_timestamp(value: datetime) -> datetime:
+    # SQLite has no timezone-aware timestamp storage. Normalize before writes;
+    # its naive values can then be read consistently as UTC, as with PostgreSQL.
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def normalized_title(title: str) -> str:
@@ -162,7 +170,7 @@ def mutation_hash(
             {
                 "title": normalized_title(payload.title),
                 "body": normalized_body(payload.body),
-                "occurred_at": payload.occurred_at.isoformat(),
+                "occurred_at": utc_timestamp(payload.occurred_at).isoformat(),
                 "visibility": payload.visibility,
             }
         )
@@ -281,10 +289,16 @@ def confirm_city_memory(
         )
     )
     if existing is not None:
-        if existing.city_id != city.id:
+        if (
+            existing.city_id != city.id
+            or existing.title != normalized_title(payload.title)
+            or existing.body != normalized_body(payload.body)
+            or utc_timestamp(existing.occurred_at) != utc_timestamp(payload.occurred_at)
+            or existing.visibility != payload.visibility
+        ):
             raise AppError(
                 "MEMORY_IDEMPOTENCY_CONFLICT",
-                "该请求编号已经用于另一座城市的记忆。",
+                "该请求编号已经用于不同内容的记忆。",
                 status_code=409,
                 details={"client_request_id": str(payload.client_request_id)},
             )
@@ -296,7 +310,7 @@ def confirm_city_memory(
         client_request_id=payload.client_request_id,
         title=normalized_title(payload.title),
         body=normalized_body(payload.body),
-        occurred_at=payload.occurred_at,
+        occurred_at=utc_timestamp(payload.occurred_at),
         visibility=payload.visibility,
     )
     db.add(memory)
@@ -358,7 +372,7 @@ def confirm_memory_update(
     memory = require_memory(db, user=user, city=city, memory_id=memory_id)
     memory.title = normalized_title(payload.title)
     memory.body = normalized_body(payload.body)
-    memory.occurred_at = payload.occurred_at
+    memory.occurred_at = utc_timestamp(payload.occurred_at)
     memory.visibility = payload.visibility
     memory.updated_at = utcnow()
     response = CityMemoryUpdateConfirmOut(status="updated", memory=memory_out(memory))

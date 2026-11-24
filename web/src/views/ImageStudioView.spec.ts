@@ -77,14 +77,16 @@ const catalog: ImageStyleCatalog = {
     poses: ['default'],
     expressions: ['warm'],
   },
-  styles: [{
-    id: 'retro_film',
-    name: '复古胶片',
-    description: '旅行底片质感',
-    swatch: '#e9583e',
-    recipe: { ...job.recipe, preservation_level: null },
-    source: null,
-  }],
+  styles: [
+    {
+      id: 'retro_film',
+      name: '复古胶片',
+      description: '旅行底片质感',
+      swatch: '#e9583e',
+      recipe: { ...job.recipe, preservation_level: null },
+      source: null,
+    },
+  ],
 }
 
 const {
@@ -118,6 +120,62 @@ describe('ImageStudioView', () => {
     setImageJobFavorite.mockResolvedValue({ ...job, is_favorite: true })
   })
 
+  it('未连接服务时明确说明，参考摄影不冒充个人作品，选照片跳回记忆', async () => {
+    getImageJobs.mockResolvedValue({ items: [] })
+    getImageStyles.mockResolvedValue({ ...catalog, available: false })
+    const wrapper = mount(ImageStudioView)
+    await flushPromises()
+    expect(wrapper.text()).toContain('影像生成服务暂未连接')
+    expect(wrapper.text()).toContain('创作灵感参考 · 非个人作品')
+    expect(wrapper.find('.image-compare-slider').exists()).toBe(false)
+    await wrapper.get('.studio-pick-source').trigger('click')
+    expect(wrapper.emitted('memories')).toEqual([[]])
+    wrapper.unmount()
+  })
+
+  it('风格目录读取失败仍可查看真实历史作品', async () => {
+    getImageStyles.mockRejectedValue(
+      new Error('explicit style-service failure'),
+    )
+    const wrapper = mount(ImageStudioView)
+    await flushPromises()
+    expect(wrapper.find('.studio-workspace').exists()).toBe(true)
+    expect(wrapper.text()).toContain('风格服务状态暂时无法读取')
+    expect(wrapper.get('.studio-source-card strong').text()).toBe(
+      'pearl-river.jpg',
+    )
+    wrapper.unmount()
+  })
+
+  it('切换收藏后忽略较早返回的历史请求，防止旧结果覆盖当前筛选', async () => {
+    let completeOld!: (value: { items: ImageJob[] }) => void
+    getImageJobs.mockReturnValueOnce(
+      new Promise((resolve) => {
+        completeOld = resolve
+      }),
+    )
+    getImageJobs.mockResolvedValueOnce({
+      items: [
+        {
+          ...job,
+          id: 'favorite-job',
+          is_favorite: true,
+          memory_title: '当前收藏记录',
+        },
+      ],
+    })
+    const wrapper = mount(ImageStudioView)
+    await wrapper.get('.studio-filter-bar input').setValue(true)
+    await flushPromises()
+    completeOld({ items: [job] })
+    await flushPromises()
+    expect(wrapper.get('.studio-history').text()).toContain('当前收藏记录')
+    expect(wrapper.get('.studio-source-card p').text()).toContain(
+      '当前收藏记录',
+    )
+    wrapper.unmount()
+  })
+
   it('shows generation history, comparison and download action', async () => {
     const wrapper = mount(ImageStudioView)
     await flushPromises()
@@ -131,7 +189,9 @@ describe('ImageStudioView', () => {
     expect(wrapper.text()).toContain('档案横带 · 珊瑚红 · 现代黑体')
     expect(wrapper.text()).toContain('小曦角色使用经授权透明素材进行确定性合成')
     expect(wrapper.find('.image-compare-slider').exists()).toBe(true)
-    expect(wrapper.get('.studio-actions a').attributes('href')).toContain('download=1')
+    expect(wrapper.get('.studio-actions a').attributes('href')).toContain(
+      'download=1',
+    )
 
     await wrapper.get('.studio-inspector-heading button').trigger('click')
     await flushPromises()

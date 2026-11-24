@@ -18,17 +18,18 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "city_visits",
-        sa.Column(
-            "check_in_source",
-            sa.String(length=20),
-            nullable=False,
-            server_default="device",
-        ),
-    )
-    op.alter_column("city_visits", "check_in_source", server_default=None)
+    with op.batch_alter_table("city_visits") as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "check_in_source", sa.String(length=20), nullable=False, server_default="device"
+            )
+        )
+    # Flush the ADD first: existing rows must receive the temporary default
+    # before SQLite recreates the table without a server default.
+    with op.batch_alter_table("city_visits") as batch_op:
+        batch_op.alter_column("check_in_source", server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_column("city_visits", "check_in_source")
+    with op.batch_alter_table("city_visits") as batch_op:
+        batch_op.drop_column("check_in_source")

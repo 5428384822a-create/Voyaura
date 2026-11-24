@@ -18,7 +18,9 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useDialogFocus } from './useDialogFocus'
+import UiButton from './UiButton.vue'
 import type {
   AppErrorInfo,
   CityMemoryDetail,
@@ -30,6 +32,7 @@ import type {
 
 const props = defineProps<{
   city: VisitedCity
+  suspended?: boolean
   phase: 'loading' | 'ready' | 'error'
   detail: CityMemoryDetail | null
   error: AppErrorInfo | null
@@ -38,7 +41,7 @@ const props = defineProps<{
   mediaTaskError: AppErrorInfo | null
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   close: []
   retry: []
   askXiaoxi: [city: VisitedCity]
@@ -52,13 +55,35 @@ defineEmits<{
 }>()
 
 const archiveMode = ref<'journal' | 'gallery'>('journal')
+const panel = ref<HTMLElement | null>(null)
+useDialogFocus(panel, () => emit('close'), {
+  active: () => !props.suspended,
+  initial: '[aria-label="关闭城市记忆"]',
+})
 
+watch(
+  () => props.city.adcode,
+  () => {
+    archiveMode.value = 'journal'
+  },
+)
+
+function switchArchiveTab(event: KeyboardEvent) {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return
+  event.preventDefault()
+  archiveMode.value = event.key==='Home' ? 'journal' : event.key==='End' ? 'gallery' : archiveMode.value==='journal' ? 'gallery' : 'journal'
+  const buttons = panel.value?.querySelectorAll<HTMLElement>('.archive-mode-switch [role=tab]')
+  buttons?.[archiveMode.value==='journal'?0:1]?.focus()
+}
 const galleryGroups = computed(() => {
-  const groups = new Map<string, {
-    date: string
-    label: string
-    items: Array<{ memory: CityMemoryItem, asset: MemoryMediaAsset }>
-  }>()
+  const groups = new Map<
+    string,
+    {
+      date: string
+      label: string
+      items: Array<{ memory: CityMemoryItem; asset: MemoryMediaAsset }>
+    }
+  >()
   for (const memory of props.detail?.memories ?? []) {
     if (!memory.media.length) continue
     const date = memory.occurred_at.slice(0, 10)
@@ -92,30 +117,60 @@ function mediaTaskLabel(task: MediaTaskItem): string {
 </script>
 
 <template>
-  <aside class="city-memory-panel" aria-labelledby="city-memory-title">
+  <aside
+    ref="panel"
+    class="city-memory-panel"
+    role="dialog"
+    :aria-modal="!suspended || undefined"
+    :aria-hidden="suspended || undefined"
+    :inert="suspended || undefined"
+    aria-labelledby="city-memory-title"
+  >
     <header>
       <div>
-        <small>MY CITY ARCHIVE · {{ city.adcode }}</small>
+
         <h2 id="city-memory-title">我与{{ city.name_zh }}</h2>
         <p>{{ city.province_zh }} · {{ city.name_en }}</p>
+        <span class="city-source-label">{{
+          city.check_in_source === 'device'
+            ? '设备定位记录'
+            : city.check_in_source === 'manual'
+              ? '手动到访记录 · 未验证当前位置'
+              : '网络城市建议记录'
+        }}</span>
       </div>
-      <button type="button" title="关闭城市记忆" aria-label="关闭城市记忆" @click="$emit('close')">
+      <button
+        type="button"
+        title="关闭城市记忆"
+        aria-label="关闭城市记忆"
+        @click="$emit('close')"
+      >
         <X :size="20" />
       </button>
     </header>
 
-    <div v-if="phase === 'loading'" class="city-memory-state" aria-live="polite">
+    <div
+      v-if="phase === 'loading'"
+      class="city-memory-state"
+      aria-live="polite"
+    >
       <LoaderCircle class="spin" :size="30" />
       <strong>正在翻阅城市档案</strong>
       <p>读取真实到访记录和旅行记忆</p>
     </div>
 
-    <div v-else-if="phase === 'error' && error" class="city-memory-state error" role="alert">
+    <div
+      v-else-if="phase === 'error' && error"
+      class="city-memory-state error"
+      role="alert"
+    >
       <AlertTriangle :size="30" />
       <strong>{{ error.message }}</strong>
       <code>{{ error.code }}</code>
       <small v-if="error.requestId">请求编号：{{ error.requestId }}</small>
-      <button type="button" @click="$emit('retry')"><RefreshCw :size="16" />重新读取</button>
+      <button type="button" @click="$emit('retry')">
+        <RefreshCw :size="16" />重新读取
+      </button>
     </div>
 
     <template v-else-if="detail">
@@ -123,74 +178,173 @@ function mediaTaskLabel(task: MediaTaskItem): string {
         <section class="visit-ledger" aria-label="到访信息">
           <div>
             <CalendarDays :size="17" />
-            <span>初次抵达</span>
+            <span>首次记录</span>
             <strong>{{ formatDate(detail.city.first_visited_at) }}</strong>
           </div>
           <div>
             <Clock3 :size="17" />
-            <span>最近到访</span>
+            <span>最近记录</span>
             <strong>{{ formatDate(detail.city.last_visited_at) }}</strong>
           </div>
         </section>
 
         <section class="city-memory-stats" aria-label="城市记忆统计">
-          <div><strong>{{ detail.stats.memories }}</strong><span>记忆</span></div>
-          <div><strong>{{ detail.stats.photos }}</strong><span>照片</span></div>
-          <div><strong>{{ detail.stats.vlogs }}</strong><span>Vlog</span></div>
-          <div><strong>{{ detail.stats.vlog_minutes }}</strong><span>分钟</span></div>
+          <div>
+            <strong>{{ detail.stats.memories }}</strong
+            ><span>记忆</span>
+          </div>
+          <div>
+            <strong>{{ detail.stats.photos }}</strong
+            ><span>照片</span>
+          </div>
+          <div>
+            <strong>{{ detail.stats.vlogs }}</strong
+            ><span>Vlog</span>
+          </div>
+          <div>
+            <strong>{{ detail.stats.vlog_minutes }}</strong
+            ><span>分钟</span>
+          </div>
         </section>
 
-        <p v-if="detail.visit_note" class="visit-note"><FileText :size="16" />{{ detail.visit_note }}</p>
+        <p v-if="detail.visit_note" class="visit-note">
+          <FileText :size="16" />{{ detail.visit_note }}
+        </p>
 
-        <div class="archive-mode-switch" role="tablist" aria-label="城市档案视图">
-          <button type="button" role="tab" :aria-selected="archiveMode === 'journal'" :class="{ active: archiveMode === 'journal' }" @click="archiveMode = 'journal'"><List :size="15" />旅程</button>
-          <button type="button" role="tab" :aria-selected="archiveMode === 'gallery'" :class="{ active: archiveMode === 'gallery' }" @click="archiveMode = 'gallery'"><Camera :size="15" />影像</button>
+        <div
+          class="archive-mode-switch"
+          role="tablist"
+          aria-label="城市档案视图"
+          @keydown="switchArchiveTab"
+        >
+          <button
+            type="button"
+            role="tab"
+            :tabindex="archiveMode === 'journal' ? 0 : -1"
+            :aria-selected="archiveMode === 'journal'"
+            :class="{ active: archiveMode === 'journal' }"
+            @click="archiveMode = 'journal'"
+          >
+            <List :size="15" />旅程
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :tabindex="archiveMode === 'gallery' ? 0 : -1"
+            :aria-selected="archiveMode === 'gallery'"
+            :class="{ active: archiveMode === 'gallery' }"
+            @click="archiveMode = 'gallery'"
+          >
+            <Camera :size="15" />影像
+          </button>
         </div>
 
-        <section v-if="mediaTasks.length || mediaTaskError" class="media-task-section" aria-labelledby="media-task-title">
+        <section
+          v-if="mediaTasks.length || mediaTaskError"
+          class="media-task-section"
+          aria-labelledby="media-task-title"
+        >
           <header>
-            <div><AlertTriangle :size="15" /><h3 id="media-task-title">媒体任务</h3></div>
+            <div>
+              <AlertTriangle :size="15" />
+              <h3 id="media-task-title">媒体任务</h3>
+            </div>
             <span>{{ mediaTasks.length }}</span>
           </header>
           <p v-if="mediaTaskError" class="media-task-error" role="alert">
-            <span>{{ mediaTaskError.message }}</span><code>{{ mediaTaskError.code }}</code>
+            <span>{{ mediaTaskError.message }}</span
+            ><code>{{ mediaTaskError.code }}</code>
           </p>
           <ul v-if="mediaTasks.length">
             <li v-for="task in mediaTasks" :key="task.asset_id">
-              <span class="media-task-kind"><Camera v-if="task.kind === 'photo'" :size="16" /><Film v-else :size="16" /></span>
+              <span class="media-task-kind"
+                ><Camera v-if="task.kind === 'photo'" :size="16" /><Film
+                  v-else
+                  :size="16"
+              /></span>
               <span class="media-task-copy">
                 <strong>{{ task.original_filename }}</strong>
-                <small>{{ task.memory_title }} · {{ mediaTaskLabel(task) }}</small>
+                <small
+                  >{{ task.memory_title }} · {{ mediaTaskLabel(task) }}</small
+                >
                 <code v-if="task.failure_code">{{ task.failure_code }}</code>
               </span>
               <span class="media-task-actions">
-                <LoaderCircle v-if="mediaTaskBusyId === task.asset_id" class="spin" :size="17" />
+                <LoaderCircle
+                  v-if="mediaTaskBusyId === task.asset_id"
+                  class="spin"
+                  :size="17"
+                />
                 <template v-else>
-                  <button v-if="task.upload_status === 'failed' && task.retryable" type="button" title="重试媒体处理" aria-label="重试媒体处理" @click="$emit('retryMedia', task)"><RefreshCw :size="14" /></button>
-                  <button v-if="task.upload_status !== 'processing'" class="danger" type="button" title="删除媒体任务" aria-label="删除媒体任务" @click="$emit('deleteMedia', task.memory_id, task)"><Trash2 :size="14" /></button>
+                  <button
+                    v-if="task.upload_status === 'failed' && task.retryable"
+                    type="button"
+                    title="重试媒体处理"
+                    aria-label="重试媒体处理"
+                    @click="$emit('retryMedia', task)"
+                  >
+                    <RefreshCw :size="14" />
+                  </button>
+                  <button
+                    v-if="task.upload_status !== 'processing'"
+                    class="danger"
+                    type="button"
+                    title="删除媒体任务"
+                    aria-label="删除媒体任务"
+                    @click="$emit('deleteMedia', task.memory_id, task)"
+                  >
+                    <Trash2 :size="14" />
+                  </button>
                 </template>
               </span>
             </li>
           </ul>
         </section>
 
-        <section v-if="archiveMode === 'journal' && detail.memories.length" class="memory-timeline" aria-label="城市记忆时间线">
+        <section
+          v-if="archiveMode === 'journal' && detail.memories.length"
+          class="memory-timeline"
+          aria-label="城市记忆时间线"
+        >
           <article v-for="memory in detail.memories" :key="memory.id">
-            <time :datetime="memory.occurred_at">{{ formatDate(memory.occurred_at) }}</time>
+            <time :datetime="memory.occurred_at">{{
+              formatDate(memory.occurred_at)
+            }}</time>
             <div>
               <div class="memory-item-meta">
-                <span class="privacy-label"><LockKeyhole :size="12" />{{ memory.visibility === 'private' ? '仅自己可见' : '已分享' }}</span>
+                <span class="privacy-label"
+                  ><LockKeyhole :size="12" />{{
+                    memory.visibility === 'private' ? '仅自己可见' : '允许分享'
+                  }}</span
+                >
                 <span class="memory-item-actions">
-                  <button type="button" title="添加照片或 Vlog" aria-label="添加照片或 Vlog" @click="$emit('uploadMedia', memory)"><ImagePlus :size="15" /></button>
-                  <button type="button" title="编辑记忆" aria-label="编辑记忆" @click="$emit('editMemory', memory)"><Pencil :size="14" /></button>
-                  <button class="danger" type="button" title="删除记忆" aria-label="删除记忆" @click="$emit('deleteMemory', memory)"><Trash2 :size="14" /></button>
+                  <UiButton variant="secondary" aria-label="添加照片或 Vlog" @click="$emit('uploadMedia', memory)"><ImagePlus :size="17" />添加照片</UiButton>
+                  <UiButton variant="tertiary" aria-label="编辑记忆" @click="$emit('editMemory',memory)"><Pencil :size="17" />编辑</UiButton>
+                  <details class="memory-actions-more"><summary aria-label="更多记忆操作">更多</summary><UiButton variant="destructive" aria-label="删除记忆" @click="$emit('deleteMemory',memory)"><Trash2 :size="17" />删除记忆</UiButton></details>
                 </span>
               </div>
               <h3>{{ memory.title }}</h3>
               <p v-if="memory.body">{{ memory.body }}</p>
               <ul v-if="memory.media.length" class="memory-media-list">
                 <li v-for="asset in memory.media" :key="asset.id">
-                  <button class="memory-media-delete" type="button" :title="`删除 ${asset.original_filename}`" :aria-label="`删除 ${asset.original_filename}`" @click="$emit('deleteMedia', memory.id, asset)"><Trash2 :size="13" /></button>
+                  <button
+                    v-if="asset.kind === 'photo'"
+                    class="memory-media-style"
+                    type="button"
+                    :aria-label="`创作 ${asset.original_filename}`"
+                    @click="$emit('stylePhoto', memory, asset)"
+                  >
+                    <Sparkles :size="14" />风格创作
+                  </button>
+                  <button
+                    class="memory-media-delete"
+                    type="button"
+                    :title="`删除 ${asset.original_filename}`"
+                    :aria-label="`删除 ${asset.original_filename}`"
+                    @click="$emit('deleteMedia', memory.id, asset)"
+                  >
+                    <Trash2 :size="13" />
+                  </button>
                   <a
                     v-if="asset.content_url"
                     class="memory-media-preview"
@@ -202,15 +356,34 @@ function mediaTaskLabel(task: MediaTaskItem): string {
                     <img
                       v-if="asset.thumbnail_url"
                       :src="asset.thumbnail_url"
-                      :alt="asset.kind === 'photo' ? asset.original_filename : `${asset.original_filename} 视频封面`"
+                      :alt="
+                        asset.kind === 'photo'
+                          ? asset.original_filename
+                          : `${asset.original_filename} 视频封面`
+                      "
                     />
-                    <span v-else><Camera v-if="asset.kind === 'photo'" :size="18" /><Film v-else :size="18" /></span>
-                    <Film v-if="asset.kind === 'vlog'" class="memory-video-mark" :size="16" />
+                    <span v-else
+                      ><Camera v-if="asset.kind === 'photo'" :size="18" /><Film
+                        v-else
+                        :size="18"
+                    /></span>
+                    <Film
+                      v-if="asset.kind === 'vlog'"
+                      class="memory-video-mark"
+                      :size="16"
+                    />
                   </a>
-                  <span v-else class="memory-media-preview"><Camera v-if="asset.kind === 'photo'" :size="18" /><Film v-else :size="18" /></span>
+                  <span v-else class="memory-media-preview"
+                    ><Camera v-if="asset.kind === 'photo'" :size="18" /><Film
+                      v-else
+                      :size="18"
+                  /></span>
                   <span class="memory-media-caption">
                     <strong>{{ asset.original_filename }}</strong>
-                    <small>{{ asset.kind === 'photo' ? '照片' : 'Vlog 封面' }} · 安全扫描已完成</small>
+                    <small
+                      >{{ asset.kind === 'photo' ? '照片' : 'Vlog 封面' }} ·
+                      安全扫描已完成</small
+                    >
                   </span>
                 </li>
               </ul>
@@ -218,28 +391,85 @@ function mediaTaskLabel(task: MediaTaskItem): string {
           </article>
         </section>
 
-        <section v-else-if="archiveMode === 'journal'" class="city-memory-empty">
+        <section
+          v-else-if="archiveMode === 'journal'"
+          class="city-memory-empty"
+        >
           <span><Camera :size="25" /></span>
           <strong>这里还没有旅行记忆</strong>
           <p>到访记录已经保存，照片、Vlog 与手记仍为空。</p>
         </section>
 
-        <section v-else-if="galleryGroups.length" class="city-gallery" aria-label="城市照片墙与 Vlog 时间线">
-          <article v-for="group in galleryGroups" :key="group.date" class="gallery-day">
-            <header><time :datetime="group.date">{{ group.label }}</time><span>{{ group.items.length }} 段影像</span></header>
+        <section
+          v-else-if="galleryGroups.length"
+          class="city-gallery"
+          aria-label="城市照片墙与 Vlog 时间线"
+        >
+          <article
+            v-for="group in galleryGroups"
+            :key="group.date"
+            class="gallery-day"
+          >
+            <header>
+              <time :datetime="group.date">{{ group.label }}</time
+              ><span>{{ group.items.length }} 段影像</span>
+            </header>
             <ul>
               <li v-for="item in group.items" :key="item.asset.id">
-                <a v-if="item.asset.content_url" :href="item.asset.content_url" target="_blank" rel="noreferrer" :aria-label="`查看 ${item.asset.original_filename}`">
-                  <img v-if="item.asset.thumbnail_url" :src="item.asset.thumbnail_url" :alt="item.asset.original_filename" />
-                  <span v-else><Camera v-if="item.asset.kind === 'photo'" :size="21" /><Film v-else :size="21" /></span>
-                  <Film v-if="item.asset.kind === 'vlog'" class="gallery-video-mark" :size="17" />
+                <a
+                  v-if="item.asset.content_url"
+                  :href="item.asset.content_url"
+                  target="_blank"
+                  rel="noreferrer"
+                  :aria-label="`查看 ${item.asset.original_filename}`"
+                >
+                  <img
+                    v-if="item.asset.thumbnail_url"
+                    :src="item.asset.thumbnail_url"
+                    :alt="item.asset.original_filename"
+                  />
+                  <span v-else
+                    ><Camera
+                      v-if="item.asset.kind === 'photo'"
+                      :size="21" /><Film v-else :size="21"
+                  /></span>
+                  <Film
+                    v-if="item.asset.kind === 'vlog'"
+                    class="gallery-video-mark"
+                    :size="17"
+                  />
                 </a>
-                <span v-else class="gallery-placeholder"><Camera v-if="item.asset.kind === 'photo'" :size="21" /><Film v-else :size="21" /></span>
+                <span v-else class="gallery-placeholder"
+                  ><Camera v-if="item.asset.kind === 'photo'" :size="21" /><Film
+                    v-else
+                    :size="21"
+                /></span>
                 <div class="gallery-item-actions">
-                  <button v-if="item.asset.kind === 'photo'" type="button" :title="`创作 ${item.asset.original_filename}`" :aria-label="`创作 ${item.asset.original_filename}`" @click="$emit('stylePhoto', item.memory, item.asset)"><Sparkles :size="14" /></button>
-                  <button class="danger" type="button" :title="`删除 ${item.asset.original_filename}`" :aria-label="`删除 ${item.asset.original_filename}`" @click="$emit('deleteMedia', item.memory.id, item.asset)"><Trash2 :size="14" /></button>
+                  <button
+                    v-if="item.asset.kind === 'photo'"
+                    type="button"
+                    :title="`创作 ${item.asset.original_filename}`"
+                    :aria-label="`创作 ${item.asset.original_filename}`"
+                    @click="$emit('stylePhoto', item.memory, item.asset)"
+                  >
+                    <Sparkles :size="14" />
+                  </button>
+                  <button
+                    class="danger"
+                    type="button"
+                    :title="`删除 ${item.asset.original_filename}`"
+                    :aria-label="`删除 ${item.asset.original_filename}`"
+                    @click="$emit('deleteMedia', item.memory.id, item.asset)"
+                  >
+                    <Trash2 :size="14" />
+                  </button>
                 </div>
-                <div class="gallery-caption"><strong>{{ item.memory.title }}</strong><small>{{ item.asset.kind === 'photo' ? '照片' : 'Vlog' }}</small></div>
+                <div class="gallery-caption">
+                  <strong>{{ item.memory.title }}</strong
+                  ><small>{{
+                    item.asset.kind === 'photo' ? '照片' : 'Vlog'
+                  }}</small>
+                </div>
               </li>
             </ul>
           </article>
@@ -253,11 +483,15 @@ function mediaTaskLabel(task: MediaTaskItem): string {
       </div>
 
       <footer>
-        <button type="button" class="memory-write-button" @click="$emit('createMemory', detail.city)">
+        <button
+          type="button"
+          class="memory-write-button"
+          @click="$emit('createMemory', detail.city)"
+        >
           <PenLine :size="17" />写一段记忆
         </button>
         <button type="button" @click="$emit('askXiaoxi', detail.city)">
-          <MessageCircle :size="17" />和小曦回顾这座城
+          <MessageCircle :size="17" />整理这座城的故事
         </button>
       </footer>
     </template>

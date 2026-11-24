@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiButton from './UiButton.vue'
 import { AlertTriangle, Check, LoaderCircle, Trash2, X } from 'lucide-vue-next'
 import type { AppErrorInfo, CityMemoryDeletePreview, VisitedCity } from '../types'
 
@@ -26,7 +27,7 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
     <section class="memory-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="memory-delete-title">
       <header>
         <div>
-          <p class="eyebrow">DELETE MEMORY · {{ city.adcode }}</p>
+
           <h2 id="memory-delete-title">删除城市记忆</h2>
         </div>
         <button type="button" title="关闭删除确认" aria-label="关闭删除确认" @click="emit('cancel')"><X :size="20" /></button>
@@ -46,7 +47,7 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
         <p v-if="preview.media_count" class="memory-delete-media-warning">这段记忆关联 {{ preview.media_count }} 个媒体文件记录。</p>
         <div class="memory-composer-actions">
           <button type="button" class="secondary" @click="emit('cancel')">保留记忆</button>
-          <button type="button" class="danger-primary" @click="emit('confirm')"><Trash2 :size="16" />确认删除</button>
+          <UiButton variant="destructive" type="button" @click="emit('confirm')"><Trash2 :size="16" />确认删除</UiButton>
         </div>
       </div>
 

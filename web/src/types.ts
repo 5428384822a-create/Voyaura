@@ -806,4 +806,4 @@ export interface MapIssue {
   suggestion: string
 }
 
-export type AppView = 'map' | 'journeys' | 'memories' | 'studio' | 'profile'
+export type AppView = 'discover' | 'map' | 'journeys' | 'memories' | 'studio' | 'profile'
