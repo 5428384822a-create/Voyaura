@@ -87,10 +87,4 @@ jobs:
         if: always()
         with:
           name: browser-acceptance
-          path: |
-            docs/design/governance/e2e.xml
-            docs/design/governance/flow-screenshots/
-            docs/design/governance/practice-screenshots/
-            docs/design/governance/journey-screenshots/
-            docs/design/governance/account-screenshots/
-            docs/design/governance/design-checks/
+          path: .local/e2e-evidence/
