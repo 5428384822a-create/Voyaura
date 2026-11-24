@@ -19,3 +19,5 @@
 本次原始JUnit位于忽略的.local/verification，浏览器JUnit与截图在.local/e2e-evidence；可通过[运行手册](../../docx/RUNBOOK.md)复现。CI会上传浏览器artifact，不能在远程完成前声称GitHub检查已通过。当前8张展示图来自原289fd4d空档案并做WebP压缩，保留其来源说明。
 
 未在本轮验证在线地图/模型/影像Provider、PostgreSQL/Redis/MinIO完整媒体组合、原生移动端、读屏或完整WCAG；测试替身与隔离库不证明这些环节完成。未使用、删除或导出个人DB/媒体。
+
+远程首次CI：Web与PostgreSQL迁移通过；API的4项中文印章测试因Ubuntu缺少CJK字体失败，其余112项通过。CI的API任务已补充安装fonts-noto-cjk，保留原测试，不跳过、不降低断言；最终结果以PR最新检查为准。

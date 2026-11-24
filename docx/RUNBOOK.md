@@ -44,3 +44,5 @@ api/.venv/Scripts/python.exe scripts/verify_e2e.py
 npm run build输出web/dist。反向代理把/api/v1转发Uvicorn，其他页面使用SPA回退。TLS、秘密管理、备份、角色/会话、限流、多人账户和媒体可靠性需独立验收。本机没有Docker，本轮未公开部署。
 
 单机owner令牌不是多租户登录。保存计划不自动点亮城市；故事只读取授权窗口已有记录，删除来源不自动删除已确认快照。在线Provider和生产并发需另行验证。
+
+Linux运行中文旅行印章需安装CJK字体，例如Ubuntu的fonts-noto-cjk；也可用VOYAURA_IMAGE_CAPTION_FONT_PATH指定已授权本地字体。CI已显式安装字体，字体缺失时原服务仍明确失败，不伪造中文渲染成功。
